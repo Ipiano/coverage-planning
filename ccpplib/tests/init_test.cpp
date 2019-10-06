@@ -1,3 +1,4 @@
+#include "ccpplib/boustrophedon_decomposer.h"
 #include "ccpplib/ccpp.h"
 
 #include <gtest/gtest.h>
@@ -14,6 +15,6 @@ typedef bg::model::polygon<PointType> PolygonType;
 
 TEST(CCPPTests, CanInstantiate)
 {
-    ccpp::PolygonDecomposer<PolygonType> decomposer;
-    ccpp::SwathPlanner<PolygonType> planner(&decomposer);
+  ccpp::BoustrophedonDecomposer<PolygonType> decomposer;
+  ccpp::SwathPlanner<PolygonType> planner(&decomposer);
 }

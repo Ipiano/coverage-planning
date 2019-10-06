@@ -15,7 +15,9 @@ DESTDIR = bin
 SOURCES += \
     $$TEST_ROOT/init_test.cpp
 
-PRE_TARGETDEPS = lib/ccpp-lib.lib
+win32: PRE_TARGETDEPS = lib/ccpp-lib.lib
+unix: PRE_TARGETDEPS = lib/libccpp-lib.a
+
 LIBS += -L$$OUT_PWD/lib -lccpp-lib
 
 # Sets up GTEST

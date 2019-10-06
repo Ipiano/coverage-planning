@@ -13,4 +13,5 @@ DESTDIR = lib
 
 HEADERS += \
     $$SOURCE_ROOT/ccpplib/ccpp.h \
-    $$SOURCE_ROOT/ccpplib/decomposition.h
+    $$SOURCE_ROOT/ccpplib/polygon_decomposer_if.h \
+    $$SOURCE_ROOT/ccpplib/boustrophedon_decomposer.h
