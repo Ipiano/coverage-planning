@@ -1,13 +1,18 @@
 #pragma once
 
+#include "decomposition.h"
+
 #include <boost/geometry.hpp>
 
 namespace ccpp {
 
-class CoveragePlanner
+template<class BoostPolygonType>
+class SwathPlanner
 {
+    typedef PolygonDecomposer<BoostPolygonType> DecomposerType;
 public:
-    CoveragePlanner();
+    SwathPlanner(DecomposerType*)
+    {}
 };
 
 }

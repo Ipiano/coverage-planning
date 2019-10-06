@@ -6,7 +6,7 @@ int main(int argc, char** argv)
 {
     QApplication app(argc, argv);
 
-    ccpp::CoveragePlanner planner;
+    //ccpp::SwathPlanner planner;
 
     return app.exec();
 }

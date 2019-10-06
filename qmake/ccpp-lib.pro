@@ -12,7 +12,5 @@ OBJECTS_DIR = $$TARGET/.o
 DESTDIR = lib
 
 HEADERS += \
-    $$SOURCE_ROOT/ccpplib/ccpp.h
-
-SOURCES += \
-    $$SOURCE_ROOT/src/ccpp.cpp
+    $$SOURCE_ROOT/ccpplib/ccpp.h \
+    $$SOURCE_ROOT/ccpplib/decomposition.h
