@@ -5,6 +5,7 @@ win32 {
 
     isEmpty(BOOST_DIR): error("Please set BOOST_DIR in environment")
     INCLUDEPATH += $$BOOST_DIR
+} else {
+    CONFIG += link_pkgconfig
+    PKGCONFIG += boost
 }
-
-INCLUDEPATH += $$PWD/../ccpplib

@@ -1,8 +1,10 @@
 #pragma once
 
-#include "polygon_decomposer_if.h"
+#include "ads/ccpp/decomposition/polygon_decomposer_if.h"
 
+namespace ads {
 namespace ccpp {
+
 template<class BoostPolygonType>
 class BoustrophedonDecomposer : public PolygonDecomposer<BoostPolygonType>
 {
@@ -16,4 +18,6 @@ public:
     return {};
   }
 };
+
+}
 }
