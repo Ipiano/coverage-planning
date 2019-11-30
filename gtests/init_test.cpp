@@ -9,6 +9,7 @@
 
 namespace bg = boost::geometry;
 using namespace testing;
+using namespace ads;
 
 typedef bg::model::d2::point_xy<double> PointType;
 typedef bg::model::polygon<PointType> PolygonType;

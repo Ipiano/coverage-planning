@@ -1,5 +1,6 @@
 TEMPLATE = lib
 unset(QT)
+TARGET=ccpp
 CONFIG += staticlib c++11
 
 include($$PWD/../boost.pri)

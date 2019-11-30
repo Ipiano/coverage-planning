@@ -1,7 +1,7 @@
 include ($$PWD/boost.pri)
 
-win32: PRE_TARGETDEPS = $$OUT_PWD/ccpp-lib.lib
-unix: PRE_TARGETDEPS = $$OUT_PWD/libccpp-lib.a
+win32: PRE_TARGETDEPS = $$OUT_PWD/../lib/ccpp.lib
+unix: PRE_TARGETDEPS = $$OUT_PWD/../lib/libccpp.a
 
-LIBS += -L$$OUT_PWD -lccpp-lib
+LIBS += -L$$OUT_PWD/../lib -lccpp
 INCLUDEPATH += $$PWD/../src
