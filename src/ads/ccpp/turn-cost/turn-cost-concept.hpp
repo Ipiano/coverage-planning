@@ -1,0 +1,37 @@
+#pragma once
+
+#include <boost/geometry/geometry.hpp>
+#include <boost/geometry/geometries/geometries.hpp>
+#include <boost/geometry/geometries/point_xy.hpp>
+
+#include <boost/units/systems/si/plane_angle.hpp>
+#include <boost/units/systems/si/io.hpp>
+
+#include <boost/core/ignore_unused.hpp>
+
+namespace ads {
+namespace ccpp {
+namespace turn_cost {
+
+template<class TurnCostImpl>
+class TurnCostConcept
+{
+    const TurnCostImpl m_turnCost;
+
+public:
+    void constraints()
+    {
+        typedef boost::geometry::model::d2::point_xy<double> Point2d;
+        typedef boost::geometry::model::segment<Point2d> Segment2d;
+        using boost::units::si::radian;
+
+        // Should have a () operator, taking a line segment and angle
+        // of travel, and return the cost for all swaths along that edge
+        double result = m_turnCost.cost(Segment2d(), radian*0);
+        boost::ignore_unused(result);
+    }
+};
+
+}
+}
+}

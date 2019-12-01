@@ -15,4 +15,5 @@ TEST_ROOT=$$PROJECT_ROOT/gtests
 LIBS += -lboost_regex
 
 SOURCES += \
-    $$TEST_ROOT/init_test.cpp
+    $$TEST_ROOT/init-test.cpp \
+    $$TEST_ROOT/uturn-test.cpp
