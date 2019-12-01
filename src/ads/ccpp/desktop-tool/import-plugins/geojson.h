@@ -16,8 +16,8 @@ class GeojsonImporter : public QObject, public ImportShapeInterface
 public:
     GeojsonImporter();
 
-    virtual QStringList fileTypes() override;
-    virtual std::pair<bool, GeoPoly> importShape(const QFileInfo& fileInfo) override;
+    virtual QStringList fileTypes() const override;
+    virtual std::pair<bool, GeoPoly> importShape(const QFileInfo& fileInfo) const override;
 };
 
 class GeojsonImporterFactory : public QObject, public ImportShapeInterfaceFactory
@@ -28,8 +28,8 @@ class GeojsonImporterFactory : public QObject, public ImportShapeInterfaceFactor
     Q_INTERFACES(ads::ccpp::desktop_tool::ImportShapeInterfaceFactory)
 
 public:
-    ImportShapeInterface* create() override;
-    void destroy(ImportShapeInterface* importer) override;
+    ImportShapeInterface* create() const override;
+    void destroy(ImportShapeInterface* importer) const override;
 };
 
 }

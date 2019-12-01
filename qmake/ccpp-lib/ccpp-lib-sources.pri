@@ -11,9 +11,10 @@ HEADERS += \
     $$CCPP_ROOT/initial-cost/initial-cost-concept.hpp \
     $$CCPP_ROOT/initial-cost/min-across-angles.hpp \
     $$CCPP_ROOT/turn-cost/turn-cost-concept.hpp \
-    $$CCPP_ROOT/turn-cost/u-shaped.hpp \
+    $$CCPP_ROOT/turn-cost/u-shaped.h \
     $$CCPP_ROOT/optimal-direction/optimal-direction-concept.h \
     $$CCPP_ROOT/optimal-direction/min-across-angles.hpp
 
 
 SOURCES += \
+    $$CCPP_ROOT/turn-cost/u-shaped.cpp

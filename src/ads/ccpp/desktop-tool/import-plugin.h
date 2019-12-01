@@ -27,7 +27,7 @@ public:
     //  [name of type] ([ext], [ext]...])
     //
     //  e.g. Geojson (*.json, *.geojson)
-    virtual QStringList fileTypes() = 0;
+    virtual QStringList fileTypes() const = 0;
 
     // Reads a file and converts it to a polygon
     // with 1 exterior shape and 0 or more interior ones
@@ -35,7 +35,7 @@ public:
     // Points should be in lon, lat order to keep with the x, y coord type
     //
     // Return [success, shape] where shape is empty if success is false
-    virtual std::pair<bool, GeoPoly> importShape(const QFileInfo& file) = 0;
+    virtual std::pair<bool, GeoPoly> importShape(const QFileInfo& file) const = 0;
 };
 
 class ImportShapeInterfaceFactory
@@ -43,8 +43,8 @@ class ImportShapeInterfaceFactory
 public:
     virtual ~ImportShapeInterfaceFactory(){}
 
-    virtual ImportShapeInterface* create() = 0;
-    virtual void destroy(ImportShapeInterface*) = 0;
+    virtual ImportShapeInterface* create() const = 0;
+    virtual void destroy(ImportShapeInterface*) const = 0;
 };
 
 }

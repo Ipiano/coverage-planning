@@ -1,6 +1,8 @@
 #include "geojson.h"
 
 #include <boost/geometry.hpp>
+#include <boost/units/systems/si.hpp>
+#include <boost/units/systems/angle/degrees.hpp>
 
 #include <QJsonDocument>
 #include <QJsonValue>
@@ -8,6 +10,8 @@
 #include <QJsonObject>
 
 #include <QDebug>
+
+using namespace boost::units;
 
 namespace ads
 {
@@ -23,9 +27,9 @@ GeojsonImporter::GeojsonImporter()
 
 }
 
-QStringList GeojsonImporter::fileTypes()
+QStringList GeojsonImporter::fileTypes() const
 {
-    return {"Geojson (*.geojson, *.json)"};
+    return {"GeoJson (*.geojson *.json)"};
 }
 
 bool isPolygon(const QJsonObject& object)
@@ -38,6 +42,8 @@ std::pair<bool, boost::geometry::ring_type<GeojsonImporter::GeoPoly>::type> conv
     if(coords.size() < 3)
         return {false, {}};
 
+    typedef quantity<si::plane_angle> amnt_radian;
+
     boost::geometry::ring_type<GeojsonImporter::GeoPoly>::type ring;
     ring.resize(uint32_t(coords.size()));
 
@@ -45,7 +51,8 @@ std::pair<bool, boost::geometry::ring_type<GeojsonImporter::GeoPoly>::type> conv
                    {
                        const QJsonArray coords = coordArr.toArray();
                        return boost::geometry::make<GeojsonImporter::LonLatRad2d>
-                            (coords.at(0).toDouble(), coords.at(1).toDouble());
+                           (static_cast<amnt_radian>(degree::degree * coords.at(0).toDouble()).value(),
+                            static_cast<amnt_radian>(degree::degree * coords.at(1).toDouble()).value());
                    });
 
     if(boost::geometry::distance(ring.front(), ring.back()) > 0.0001)
@@ -59,9 +66,9 @@ std::pair<bool, boost::geometry::ring_type<GeojsonImporter::GeoPoly>::type> conv
     return {true, std::move(ring)};
 }
 
-std::pair<bool, GeojsonImporter::GeoPoly> GeojsonImporter::importShape(const QFileInfo& fileInfo)
+std::pair<bool, GeojsonImporter::GeoPoly> GeojsonImporter::importShape(const QFileInfo& fileInfo) const
 {
-    QFile fileData(fileInfo.path());
+    QFile fileData(fileInfo.filePath());
 
     if(!fileData.open(QIODevice::ReadOnly))
     {
@@ -144,11 +151,11 @@ std::pair<bool, GeojsonImporter::GeoPoly> GeojsonImporter::importShape(const QFi
     return {true, std::move(result)};
 }
 
-ImportShapeInterface* GeojsonImporterFactory::create()
+ImportShapeInterface* GeojsonImporterFactory::create() const
 {
     return new GeojsonImporter();
 }
-void GeojsonImporterFactory::destroy(ImportShapeInterface* importer)
+void GeojsonImporterFactory::destroy(ImportShapeInterface* importer) const
 {
     delete importer;
 }

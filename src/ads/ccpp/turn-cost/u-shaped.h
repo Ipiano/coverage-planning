@@ -13,15 +13,12 @@ namespace ads {
 namespace ccpp {
 namespace turn_cost {
 
-template<class Segment2d>
 class UShaped
 {
-    typedef boost::geometry::point_type<Segment2d> Point2d;
-
     typedef boost::units::quantity<boost::units::si::plane_angle> AngleRad;
     typedef boost::units::quantity<boost::units::degree::plane_angle> AngleDeg;
 
-    const double pi = static_cast<AngleRad>(boost::units::degree::degree * 180).value();
+    const static double pi;
 
     double m_weight1;
     double m_weight2;
@@ -30,26 +27,12 @@ class UShaped
     // Adjusts an angle to 0-90 degrees,
     // by first adding a multiple of pi to get to the range
     // [-90, 90] and then returning the absolute value
-    double fixAngle(double radians) const
-    {
-        if(radians < -pi/2)
-        {
-            radians = radians + pi * (-int((radians+pi/2)/pi) + 1);
-        }
-        else if(radians >= pi/2)
-        {
-            radians = radians - pi * int((radians+pi/2)/pi);
-        }
-        return std::abs(radians);
-    }
+    double fixAngle(double radians) const;
 
 public:
-    UShaped(const double turnWeight=1., const double headlandWeight1 = 1., const double headlandWeight2 = 1.)
-        : m_weight1(turnWeight), m_weight2(headlandWeight1), m_weight3(headlandWeight2)
-    {
+    UShaped(const double turnWeight=1., const double headlandWeight1 = 1., const double headlandWeight2 = 1.);
 
-    }
-
+    template<class Segment2d>
     double operator()(const Segment2d& segment, const AngleRad& travelAngle) const
     {
         namespace bg = boost::geometry;

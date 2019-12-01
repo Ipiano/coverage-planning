@@ -27,7 +27,7 @@ public:
 
         // Should have a () operator, taking a line segment and angle
         // of travel, and return the cost for all swaths along that edge
-        double result = m_turnCost.cost(Segment2d(), radian*0);
+        double result = m_turnCost(Segment2d(), radian*0);
         boost::ignore_unused(result);
     }
 };

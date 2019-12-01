@@ -42,7 +42,8 @@ class MinAcrossAngles
         AngleCostSum(TurnCostCalculator calculator, const AngleRad angle)
             : m_angle(angle), m_totalCost(0), m_calculator(calculator){}
 
-        void operator()(const Segment2d& segment)
+        template<class SegmentT>
+        void operator()(const SegmentT& segment)
         {
             m_totalCost += m_calculator(segment, m_angle);
         }
