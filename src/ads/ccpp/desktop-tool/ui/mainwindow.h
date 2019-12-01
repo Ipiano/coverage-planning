@@ -45,7 +45,7 @@ public:
 
 private slots:
     void loadFile();
-    void loadShape(const ImportShapeInterface::GeoPoly& shape);
+    void loadShape(const geometry::GeoPolygon2d<boost::geometry::radian>& shape);
     void updateView();
 };
 

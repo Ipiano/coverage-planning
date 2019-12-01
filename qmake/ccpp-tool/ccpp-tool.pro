@@ -13,8 +13,11 @@ FORMS = $$TOOL_ROOT/ui/mainwindow.ui
 
 SOURCES += \
     $$TOOL_ROOT/main.cpp \
-    $$TOOL_ROOT/ui/mainwindow.cpp
+    $$TOOL_ROOT/ui/mainwindow.cpp \
+    $$TOOL_ROOT/coordinate-transform.cpp
 
 HEADERS += \
     $$TOOL_ROOT/import-plugin.h \
-    $$TOOL_ROOT/ui/mainwindow.h
+    $$TOOL_ROOT/ui/mainwindow.h \
+    $$TOOL_ROOT/coordinate-transform.h \
+    $$TOOL_ROOT/typedefs.h

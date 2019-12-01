@@ -4,6 +4,8 @@
 #include "ads/ccpp/initial-cost/min-across-angles.hpp"
 #include "ads/ccpp/turn-cost/u-shaped.h"
 
+#include "ads/ccpp/desktop-tool/coordinate-transform.h"
+
 #include <QDebug>
 #include <QFileDialog>
 #include <QDir>
@@ -13,6 +15,7 @@
 #include <boost/geometry.hpp>
 #include <boost/geometry/geometries/point_xy.hpp>
 #include <boost/geometry/geometries/polygon.hpp>
+#include <boost/geometry/strategies/cartesian/centroid_average.hpp>
 
 #include <boost/units/systems/si.hpp>
 #include <boost/units/systems/angle/degrees.hpp>
@@ -29,46 +32,9 @@ namespace ui
 namespace bg = boost::geometry;
 namespace bu = boost::units;
 
-typedef bu::quantity<bu::si::plane_angle> amnt_radians;
-typedef bu::quantity<bu::degree::plane_angle> amnt_degrees;
-
-typedef bg::model::d2::point_xy<double> CartesianPoint;
-typedef bg::model::polygon<CartesianPoint> CartesianPoly;
-typedef bg::ring_type<CartesianPoly>::type CartesianRing;
-
-typedef ImportShapeInterface::GeoPoly GeoPoly;
-typedef ImportShapeInterface::LonLatRad2d GeoPoint;
-typedef bg::ring_type<GeoPoly>::type GeoRing;
-
-CartesianPoint projectCartesian(GeoPoint point, const GeoPoint& reference);
-CartesianRing projectCartesian(const GeoRing& ring, const GeoPoint& reference);
-CartesianPoly projectCartesian(const GeoPoly& poly, const GeoPoint& reference);
-
-QGraphicsItem* createItem(const CartesianPoly& poly);
-QGraphicsItem* createItem(const CartesianRing& ring);
-QGraphicsItem* createArrow(const CartesianPoint& origin, const double &length, const amnt_radians &angle);
-
-class PointAverage
-{
-    GeoPoint m_average;
-    uint32_t m_count;
-public:
-    PointAverage() : m_average(0, 0), m_count(0){}
-
-    void operator()(const GeoPoint& pt)
-    {
-        bg::add_point(m_average, pt);
-        m_count++;
-    }
-
-    GeoPoint average() const
-    {
-        auto result = m_average;
-        bg::divide_value(result, m_count);
-        return result;
-    }
-};
-
+QGraphicsItem* createItem(const ccpp::geometry::Polygon2d& poly);
+QGraphicsItem* createItem(const ccpp::geometry::Ring2d& ring);
+QGraphicsItem* createArrow(const ccpp::geometry::Point2d& origin, const double &length, const quantity::Radians &angle);
 
 MainWindow::MainWindow(const QVector<std::shared_ptr<ImportShapeInterfaceFactory> > &shapeImporters, QWidget *parent) :
     QMainWindow(parent),
@@ -158,24 +124,36 @@ void MainWindow::updateView()
     m_initialDirArrow->setVisible(m_ui->checkBox_initialDir->checkState() == Qt::CheckState::Checked);
 }
 
-void MainWindow::loadShape(const GeoPoly& shape)
+void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::radian> &shape)
 {
     m_scene->clear();
 
-    const PointAverage centroidFinder = bg::for_each_point(shape, PointAverage());
-    const GeoPoint centroid = centroidFinder.average();
+    geometry::GeoPolygon2d<bg::degree> shapeDegrees;
+    bg::transform(shape, shapeDegrees);
 
-    const auto shapeXY = projectCartesian(shape, centroid);
+    auto shapeXY1 = cast_polygon<ccpp::geometry::Polygon2d>(shapeDegrees);
+    ccpp::geometry::Polygon2d shapeXY2;
+
+    ccpp::geometry::Point2d centroid;
+    bg::centroid(shapeXY1, centroid);
+
+    bg::strategy::transform::translate_transformer<double, 2, 2> translate(-bg::get<0>(centroid), -bg::get<1>(centroid));
+    bg::transform(shapeXY1, shapeXY2, translate);
+
+    bg::strategy::transform::scale_transformer<double, 2, 2> scale(1e6, 1e6);
+    bg::transform(shapeXY2, shapeXY1, scale);
+
+    const auto& shapeXY = shapeXY1;
 
     ccpp::turn_cost::UShaped turnCost(1/0.5, 1/2., 1/2.);
-    ccpp::initial_cost::MinAcrossAngles<ccpp::turn_cost::UShaped, CartesianPoly> initialCost(turnCost);
+    ccpp::initial_cost::MinAcrossAngles<ccpp::turn_cost::UShaped> initialCost(turnCost);
     const auto initialResult = initialCost(shapeXY);
 
     m_rawShape = createItem(shapeXY);
     const auto rect = m_rawShape->boundingRect();
     const auto diag = std::sqrt(rect.width()*rect.width() + rect.height()*rect.height());
 
-    m_initialDirArrow = createArrow(bg::make_zero<CartesianPoint>(), 0.25*diag, initialResult.second);
+    m_initialDirArrow = createArrow(bg::make_zero<ccpp::geometry::Point2d>(), 0.25*diag, initialResult.second);
 
     m_scene->addItem(m_rawShape);
     m_scene->addItem(m_initialDirArrow);
@@ -185,46 +163,7 @@ void MainWindow::loadShape(const GeoPoly& shape)
     updateView();
 }
 
-CartesianPoint projectCartesian(GeoPoint point, const GeoPoint& reference)
-{
-    // TODO Maybe: Use better projection method
-    bg::subtract_point(point, reference);
-
-    auto result = bg::make<CartesianPoint>(static_cast<amnt_degrees>(bg::get<0>(point) * bu::si::radian).value(),
-                                           static_cast<amnt_degrees>(bg::get<1>(point) * bu::si::radian).value());
-
-    bg::multiply_value(result, 1e6);
-    return result;
-}
-
-CartesianRing projectCartesian(const GeoRing& ring, const GeoPoint& reference)
-{
-    CartesianRing result;
-    result.resize(ring.size());
-
-    std::transform(ring.begin(), ring.end(), result.begin(), [reference](const GeoPoint& point)
-                   {
-                       return projectCartesian(point, reference);
-                   });
-
-    return result;
-}
-
-CartesianPoly projectCartesian(const GeoPoly& poly, const GeoPoint& reference)
-{
-    CartesianPoly result;
-    result.inners().resize(poly.inners().size());
-
-    result.outer() = projectCartesian(poly.outer(), reference);
-    std::transform(poly.inners().begin(), poly.inners().end(), result.inners().begin(), [reference](const GeoRing& ring)
-                   {
-                       return projectCartesian(ring, reference);
-                   });
-
-    return result;
-}
-
-QGraphicsItem* createItem(const CartesianPoly& poly)
+QGraphicsItem* createItem(const ccpp::geometry::Polygon2d& poly)
 {
     auto shapeGroup = new QGraphicsItemGroup();
     shapeGroup->addToGroup(createItem(poly.outer()));
@@ -236,11 +175,11 @@ QGraphicsItem* createItem(const CartesianPoly& poly)
     return shapeGroup;
 }
 
-QGraphicsItem* createItem(const CartesianRing& ring)
+QGraphicsItem* createItem(const ccpp::geometry::Ring2d& ring)
 {
     QPolygonF qRing(int(ring.size()));
 
-    std::transform(ring.begin(), ring.end(), qRing.begin(), [](const CartesianPoint& pt)
+    std::transform(ring.begin(), ring.end(), qRing.begin(), [](const ccpp::geometry::Point2d& pt)
                    {
                        return QPointF(bg::get<0>(pt), bg::get<1>(pt));
                    });
@@ -250,27 +189,27 @@ QGraphicsItem* createItem(const CartesianRing& ring)
     return ringGraphic;
 }
 
-QGraphicsItem* createArrow(const CartesianPoint& origin, const double& length, const amnt_radians& angle)
+QGraphicsItem* createArrow(const ccpp::geometry::Point2d& origin, const double& length, const quantity::Radians& angle)
 {
     QPainterPath path({bg::get<0>(origin), bg::get<1>(origin)});
 
-    CartesianPoint tip = bg::make<CartesianPoint>(std::cos(angle.value()), std::sin(angle.value()));
+    ccpp::geometry::Point2d tip = bg::make<ccpp::geometry::Point2d>(std::cos(angle.value()), std::sin(angle.value()));
     bg::multiply_value(tip, length);
     bg::add_point(tip, origin);
 
     const QPointF qTip(bg::get<0>(tip), bg::get<1>(tip));
     path.lineTo(qTip);
 
-    const auto offset = static_cast<amnt_radians>(5*bu::degree::degree);
+    const auto offset = static_cast<quantity::Radians>(5*bu::degree::degree);
 
-    CartesianPoint left = bg::make<CartesianPoint>(std::cos((angle+offset).value()), std::sin((angle+offset).value()));
+    ccpp::geometry::Point2d left = bg::make<ccpp::geometry::Point2d>(std::cos((angle+offset).value()), std::sin((angle+offset).value()));
     bg::multiply_value(left, length*0.8);
     bg::add_point(left, origin);
 
     path.lineTo({bg::get<0>(left), bg::get<1>(left)});
     path.lineTo(qTip);
 
-    CartesianPoint right = bg::make<CartesianPoint>(std::cos((angle-offset).value()), std::sin((angle-offset).value()));
+    ccpp::geometry::Point2d right = bg::make<ccpp::geometry::Point2d>(std::cos((angle-offset).value()), std::sin((angle-offset).value()));
     bg::multiply_value(right, length*0.8);
     bg::add_point(right, origin);
 

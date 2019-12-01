@@ -11,7 +11,7 @@
 
 #include <QDebug>
 
-using namespace boost::units;
+namespace bg = boost::geometry;
 
 namespace ads
 {
@@ -37,22 +37,20 @@ bool isPolygon(const QJsonObject& object)
     return object["geometry"].toObject()["type"].toString() == "Polygon";
 }
 
-std::pair<bool, boost::geometry::ring_type<GeojsonImporter::GeoPoly>::type> convertPoly(const QJsonArray& coords)
+std::pair<bool, geometry::GeoRing2d<bg::radian>> convertPoly(const QJsonArray& coords)
 {
     if(coords.size() < 3)
         return {false, {}};
 
-    typedef quantity<si::plane_angle> amnt_radian;
-
-    boost::geometry::ring_type<GeojsonImporter::GeoPoly>::type ring;
+    geometry::GeoRing2d<bg::radian> ring;
     ring.resize(uint32_t(coords.size()));
 
     std::transform(coords.begin(), coords.end(), ring.begin(), [](const QJsonValue& coordArr)
                    {
                        const QJsonArray coords = coordArr.toArray();
-                       return boost::geometry::make<GeojsonImporter::LonLatRad2d>
-                           (static_cast<amnt_radian>(degree::degree * coords.at(0).toDouble()).value(),
-                            static_cast<amnt_radian>(degree::degree * coords.at(1).toDouble()).value());
+                       return boost::geometry::make<geometry::GeoPoint2d<bg::radian>>
+                           (static_cast<quantity::Radians>(units::Degree * coords.at(0).toDouble()).value(),
+                            static_cast<quantity::Radians>(units::Degree * coords.at(1).toDouble()).value());
                    });
 
     if(boost::geometry::distance(ring.front(), ring.back()) > 0.0001)
@@ -66,7 +64,7 @@ std::pair<bool, boost::geometry::ring_type<GeojsonImporter::GeoPoly>::type> conv
     return {true, std::move(ring)};
 }
 
-std::pair<bool, GeojsonImporter::GeoPoly> GeojsonImporter::importShape(const QFileInfo& fileInfo) const
+std::pair<bool, geometry::GeoPolygon2d<boost::geometry::radian> > GeojsonImporter::importShape(const QFileInfo& fileInfo) const
 {
     QFile fileData(fileInfo.filePath());
 
@@ -125,7 +123,7 @@ std::pair<bool, GeojsonImporter::GeoPoly> GeojsonImporter::importShape(const QFi
     const QJsonObject geometry = featureObject["geometry"].toObject();
     const QJsonArray coords = geometry["coordinates"].toArray();
 
-    GeoPoly result;
+    geometry::GeoPolygon2d<bg::radian> result;
     const auto maybeOuter = convertPoly(coords.at(0).toArray());
     if(!maybeOuter.first)
     {

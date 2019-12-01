@@ -2,44 +2,34 @@
 
 #include <tuple>
 #include <utility>
+#include <iostream>
 
 #include <boost/concept/assert.hpp>
 #include <boost/concept_check.hpp>
 
-#include <boost/units/systems/si/plane_angle.hpp>
-#include <boost/units/systems/angle/degrees.hpp>
-#include <boost/units/systems/si/io.hpp>
-
 #include <boost/geometry/core/exterior_ring.hpp>
-#include <boost/geometry/geometries/point_xy.hpp>
-#include <boost/geometry/geometries/polygon.hpp>
 
-#include "ads/ccpp/turn-cost/turn-cost-concept.hpp"
+#include "ads/ccpp/turn-cost/turn-cost-concept.h"
+#include "ads/ccpp/typedefs.h"
 
 namespace ads {
 namespace ccpp {
 namespace optimal_direction {
 
-template<class TurnCostCalculator, class Polygon2d>
+template<class TurnCostCalculator>
 class MinAcrossAngles
 {
-    typedef boost::units::quantity<boost::units::si::plane_angle> AngleRad;
-    typedef boost::units::quantity<boost::units::degree::plane_angle> AngleDeg;
-
-    typedef boost::geometry::point_type<Polygon2d> Point2d;
-    typedef boost::geometry::model::referring_segment<Point2d> Segment2d;
-
-    AngleRad m_increment;
+    quantity::Radians m_increment;
     TurnCostCalculator m_turnCalculator;
 
     struct AngleCostSum
     {
-        AngleRad m_angle;
+        quantity::Radians m_angle;
         double m_totalCost;
         TurnCostCalculator m_calculator;
 
     public:
-        AngleCostSum(TurnCostCalculator calculator, const AngleRad angle)
+        AngleCostSum(TurnCostCalculator calculator, const quantity::Radians angle)
             : m_angle(angle), m_totalCost(0), m_calculator(calculator){}
 
         template<class SegmentT>
@@ -58,33 +48,32 @@ public:
     BOOST_CONCEPT_ASSERT((turn_cost::TurnCostConcept<TurnCostCalculator>));
     BOOST_CONCEPT_ASSERT((boost::Assignable<TurnCostCalculator>));
 
-    MinAcrossAngles(TurnCostCalculator turnCalculator, const AngleRad increment)
+    MinAcrossAngles(TurnCostCalculator turnCalculator, const quantity::Radians increment)
         : m_increment(increment)
         , m_turnCalculator(turnCalculator)
     {
     }
 
-    MinAcrossAngles(TurnCostCalculator turnCalculator, const AngleDeg increment = 1.0*boost::units::degree::degrees)
-        : MinAcrossAngles(turnCalculator, static_cast<AngleRad>(increment))
+    MinAcrossAngles(TurnCostCalculator turnCalculator, const quantity::Degrees increment = 1.0*units::Degree)
+        : MinAcrossAngles(turnCalculator, static_cast<quantity::Radians>(increment))
     {
     }
 
-    std::pair<double, AngleRad> operator()(const Polygon2d& poly) const
+    std::pair<double, quantity::Radians> operator()(const geometry::Polygon2d& poly) const
     {
-        using namespace boost::units::si;
-        using namespace boost::units::degree;
+        const static auto maxAngle = static_cast<quantity::Radians>(180*units::Degree);
 
-        const static auto maxAngle = static_cast<AngleRad>(180*degree);
-
-        std::pair<double, AngleRad> bestResult(-1, radian*0);
+        std::pair<double, quantity::Radians> bestResult(-1, units::Radian*0);
 
         const auto& outerRing = boost::geometry::exterior_ring(poly);
         if(outerRing.size() < 3)
             return bestResult;
 
-        for(AngleRad currAngle = radian*0; currAngle < maxAngle; currAngle += m_increment)
+        for(quantity::Radians currAngle = units::Radian*0; currAngle < maxAngle; currAngle += m_increment)
         {
             const auto costSum = boost::geometry::for_each_segment(outerRing, AngleCostSum(m_turnCalculator, currAngle));
+
+            std::cout << currAngle << ": " << costSum.cost() << std::endl;
 
             if(costSum.cost() < bestResult.first || bestResult.first < 0)
             {
