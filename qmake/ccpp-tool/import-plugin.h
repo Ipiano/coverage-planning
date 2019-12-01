@@ -1,4 +1,0 @@
-#ifndef IMPORTPLUGIN_H
-#define IMPORTPLUGIN_H
-
-#endif // IMPORTPLUGIN_H

@@ -11,3 +11,5 @@ TOOL_ROOT = $$SOURCE_ROOT/ads/ccpp/desktop-tool
 
 SOURCES += \
     $$TOOL_ROOT/main.cpp
+HEADERS += \
+    $$TOOL_ROOT/import-plugin.h \
