@@ -1,4 +1,4 @@
-SOURCE_ROOT = $$PWD/../../src
+SOURCE_ROOT = $$top_srcdir/src
 INCLUDEPATH += $$SOURCE_ROOT
 
 CCPP_ROOT = $$SOURCE_ROOT/ads/ccpp

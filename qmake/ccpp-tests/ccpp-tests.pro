@@ -2,11 +2,11 @@ TEMPLATE = app
 unset(QT)
 CONFIG += console c++11
 
-include($$PWD/../ccpp.pri)
-include($$PWD/../output_dirs.pri)
-include($$PWD/../gtest.pri)
+include($$top_qmakedir/ccpp.pri)
+include($$top_qmakedir/output_dirs.pri)
+include($$top_qmakedir/gtest.pri)
 
-PROJECT_ROOT = $$PWD/../..
+PROJECT_ROOT = $$top_srcdir
 TEST_ROOT=$$PROJECT_ROOT/gtests
 
 # Not sure why, but I can't get regular regex.a to link
