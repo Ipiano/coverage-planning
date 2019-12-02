@@ -32,14 +32,12 @@ std::pair<std::vector<SortEdge>, geometry::Point2d> makeEdgeListAndFindCentroid(
 
 void sortEdgeList(std::vector<SortEdge>& segmentsWithEdges, const geometry::Point2d &centroid, const quantity::Radians &sweepDir)
 {
-    const static auto vertical = static_cast<quantity::Radians>(units::Degree*90);
-
     // Move segments so origin is the centroid
-    // Then rotate around the centroid by -(sweep angle-pi/2)
-    // So that the sweep angle is the positive Y direction
+    // Then rotate around the centroid by -sweep angle
+    // So that the sweep angle is the positive X direction
     // Note: Sweep angle is defined counter-clockwise, but boost rotation is clockwise
     //      so the negative disappears
-    bg::strategy::transform::rotate_transformer<bg::radian, double, 2, 2> rotate((sweepDir-vertical).value());
+    bg::strategy::transform::rotate_transformer<bg::radian, double, 2, 2> rotate(sweepDir.value());
     bg::strategy::transform::translate_transformer<double, 2, 2> translate(-bg::get<0>(centroid), -bg::get<1>(centroid));
 
     std::transform(segmentsWithEdges.begin(), segmentsWithEdges.end(), segmentsWithEdges.begin(),
