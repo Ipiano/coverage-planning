@@ -3,7 +3,7 @@ QT -= gui widgets
 CONFIG += plugin c++11
 TARGET = geojson
 
-include($$top_qmakedir/output_dirs.pri)
+include($$top_qmakedir/output-dirs.pri)
 include($$top_qmakedir/boost.pri)
 
 DESTDIR = $$top_builddir/bin/shape-importers

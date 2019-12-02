@@ -3,7 +3,7 @@ unset(QT)
 CONFIG += console c++11
 
 include($$top_qmakedir/ccpp.pri)
-include($$top_qmakedir/output_dirs.pri)
+include($$top_qmakedir/output-dirs.pri)
 include($$top_qmakedir/gtest.pri)
 
 PROJECT_ROOT = $$top_srcdir
