@@ -73,8 +73,6 @@ public:
         {
             const auto costSum = boost::geometry::for_each_segment(outerRing, AngleCostSum(m_turnCalculator, currAngle));
 
-            std::cout << currAngle << ": " << costSum.cost() << std::endl;
-
             if(costSum.cost() < bestResult.first || bestResult.first < 0)
             {
                 bestResult = {costSum.cost(), currAngle};

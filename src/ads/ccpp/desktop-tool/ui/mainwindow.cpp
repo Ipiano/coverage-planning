@@ -5,6 +5,8 @@
 #include "ads/ccpp/turn-cost/u-shaped.h"
 
 #include "ads/ccpp/desktop-tool/coordinate-transform.h"
+#include "ads/ccpp/dcel.h"
+#include "ads/ccpp/sort-edges.h"
 
 #include <QDebug>
 #include <QFileDialog>
@@ -35,6 +37,12 @@ namespace bu = boost::units;
 QGraphicsItem* createItem(const ccpp::geometry::Polygon2d& poly);
 QGraphicsItem* createItem(const ccpp::geometry::Ring2d& ring);
 QGraphicsItem* createArrow(const ccpp::geometry::Point2d& origin, const double &length, const quantity::Radians &angle);
+QGraphicsItem* createSweepPath(const std::vector<const dcel::const_half_edge_t*> edges);
+
+QPointF makePoint(const ccpp::geometry::Point2d& pt)
+{
+    return {bg::get<0>(pt), bg::get<1>(pt)};
+}
 
 MainWindow::MainWindow(const QVector<std::shared_ptr<ImportShapeInterfaceFactory> > &shapeImporters, QWidget *parent) :
     QMainWindow(parent),
@@ -45,12 +53,12 @@ MainWindow::MainWindow(const QVector<std::shared_ptr<ImportShapeInterfaceFactory
     m_scene = new QGraphicsScene(this);
     m_ui->graphicsView->setScene(m_scene);
 
-    m_ui->graphicsView->setTransform(QTransform(1, 0, 0, 0, -1, 0, 0, 0, 1));
-
     connect(m_ui->action_loadShape, &QAction::triggered, this, &MainWindow::loadFile);
 
     connect(m_ui->checkBox_rawShape, &QCheckBox::clicked, this, &MainWindow::updateView);
     connect(m_ui->checkBox_initialDir, &QCheckBox::clicked, this, &MainWindow::updateView);
+    connect(m_ui->checkBox_sweepOrder, &QCheckBox::clicked, this, &MainWindow::updateView);
+    connect(m_ui->checkBox_rotate, &QCheckBox::clicked, this, &MainWindow::updateView);
 
     for(const auto& importer : shapeImporters)
     {
@@ -122,6 +130,20 @@ void MainWindow::updateView()
 
     m_rawShape->setVisible(m_ui->checkBox_rawShape->checkState() == Qt::CheckState::Checked);
     m_initialDirArrow->setVisible(m_ui->checkBox_initialDir->checkState() == Qt::CheckState::Checked);
+    m_sweepPath->setVisible(m_ui->checkBox_sweepOrder->checkState() == Qt::CheckState::Checked);
+
+    // Always flip scene upside down so +y is up
+    QTransform transform(1, 0, 0, 0, -1, 0, 0, 0, 1);
+
+    // Maybe rotate so that sweep direction is up
+    if(m_ui->checkBox_rotate->checkState() == Qt::CheckState::Checked)
+    {
+        const static auto vertical = static_cast<quantity::Radians>(units::Degree*90);
+        transform.rotate(static_cast<quantity::Degrees>(-(m_sweepDir - vertical)).value());
+    }
+
+    m_ui->graphicsView->setTransform(transform);
+    m_ui->graphicsView->fitInView(m_scene->itemsBoundingRect(), Qt::AspectRatioMode::KeepAspectRatio);
 }
 
 void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::radian> &shape)
@@ -144,21 +166,25 @@ void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::radian> &shape)
     bg::transform(shapeXY2, shapeXY1, scale);
 
     const auto& shapeXY = shapeXY1;
+    m_rawShape = createItem(shapeXY);
 
     ccpp::turn_cost::UShaped turnCost(1/0.5, 1/2., 1/2.);
     ccpp::initial_cost::MinAcrossAngles<ccpp::turn_cost::UShaped> initialCost(turnCost);
     const auto initialResult = initialCost(shapeXY);
+    m_sweepDir = initialResult.second;
 
-    m_rawShape = createItem(shapeXY);
     const auto rect = m_rawShape->boundingRect();
     const auto diag = std::sqrt(rect.width()*rect.width() + rect.height()*rect.height());
-
     m_initialDirArrow = createArrow(bg::make_zero<ccpp::geometry::Point2d>(), 0.25*diag, initialResult.second);
+
+    const ccpp::DoublyConnectedEdgeList dcel(shapeXY);
+    auto edges = dcel.edges(dcel.insideFace());
+    ccpp::sortEdges(edges, initialResult.second);
+    m_sweepPath = createSweepPath(edges);
 
     m_scene->addItem(m_rawShape);
     m_scene->addItem(m_initialDirArrow);
-
-    m_ui->graphicsView->fitInView(m_scene->itemsBoundingRect(), Qt::AspectRatioMode::KeepAspectRatio);
+    m_scene->addItem(m_sweepPath);
 
     updateView();
 }
@@ -217,6 +243,25 @@ QGraphicsItem* createArrow(const ccpp::geometry::Point2d& origin, const double& 
 
     auto pathItem = new QGraphicsPathItem(path);
     pathItem->setPen(QPen(QBrush(QColor()), 5));
+
+    return pathItem;
+}
+
+QGraphicsItem* createSweepPath(const std::vector<const dcel::const_half_edge_t*> edges)
+{
+    QPainterPath path(makePoint(edges[0]->origin->location));
+
+    path.addEllipse(makePoint(edges[0]->origin->location), 10, 10);
+    path.moveTo(makePoint(edges[0]->origin->location));
+
+    for(const auto& edge : edges)
+    {
+        const auto& pt = edge->origin->location;
+        path.lineTo(makePoint(pt));
+    }
+
+    auto pathItem = new QGraphicsPathItem(path);
+    pathItem->setPen(QPen(QBrush(QColor(Qt::GlobalColor::red)), 2));
 
     return pathItem;
 }

@@ -33,10 +33,13 @@ class MainWindow : public QMainWindow
 
     QGraphicsItem* m_rawShape = nullptr;
     QGraphicsItem* m_initialDirArrow = nullptr;
+    QGraphicsItem* m_sweepPath = nullptr;
 
     QString m_defaultFilePath = QDir::homePath();
 
     std::unique_ptr<Ui::MainWindow> m_ui;
+
+    quantity::Radians m_sweepDir = units::Radian*0;
 
 public:
     explicit MainWindow(const QVector<std::shared_ptr<ImportShapeInterfaceFactory> > &shapeImporters = {},

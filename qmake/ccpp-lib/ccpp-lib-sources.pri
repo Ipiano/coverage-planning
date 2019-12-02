@@ -14,9 +14,11 @@ HEADERS += \
     $$CCPP_ROOT/turn-cost/u-shaped.h \
     $$CCPP_ROOT/optimal-direction/optimal-direction-concept.h \
     $$CCPP_ROOT/optimal-direction/min-across-angles.hpp \
-    $$CCPP_ROOT/typedefs.h
+    $$CCPP_ROOT/typedefs.h \
+    $$CCPP_ROOT/sort-edges.h
 
 
 SOURCES += \
     $$CCPP_ROOT/turn-cost/u-shaped.cpp \
-    $$CCPP_ROOT/dcel.cpp
+    $$CCPP_ROOT/dcel.cpp \
+    $$CCPP_ROOT/sort-edges.cpp

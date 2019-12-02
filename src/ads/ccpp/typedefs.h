@@ -17,6 +17,7 @@ namespace geometry
 typedef boost::geometry::model::d2::point_xy<double> Point2d;
 typedef boost::geometry::model::polygon<Point2d> Polygon2d;
 typedef boost::geometry::ring_type<Polygon2d>::type Ring2d;
+typedef boost::geometry::model::segment<Point2d> Segment2d;
 }
 
 namespace quantity

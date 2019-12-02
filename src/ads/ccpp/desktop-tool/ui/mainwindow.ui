@@ -49,6 +49,13 @@
        </widget>
       </item>
       <item>
+       <widget class="QCheckBox" name="checkBox_sweepOrder">
+        <property name="text">
+         <string>Sweep Order</string>
+        </property>
+       </widget>
+      </item>
+      <item>
        <spacer name="verticalSpacer">
         <property name="orientation">
          <enum>Qt::Vertical</enum>
@@ -60,6 +67,14 @@
          </size>
         </property>
        </spacer>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="checkBox_rotate">
+        <property name="text">
+         <string>Rotate To
+Sweep Dir</string>
+        </property>
+       </widget>
       </item>
      </layout>
     </item>
