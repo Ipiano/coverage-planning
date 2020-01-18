@@ -1,19 +1,40 @@
 #include "u-shaped.h"
 
-#include <boost/geometry/geometries/point_xy.hpp>
-#include <boost/geometry/geometries/segment.hpp>
-#include <boost/geometry/core/access.hpp>
-#include <boost/geometry/algorithms/length.hpp>
-
-#include <boost/units/systems/si/plane_angle.hpp>
-#include <boost/units/systems/angle/degrees.hpp>
-#include <boost/units/systems/si/io.hpp>
+#include "ads/ccpp/typedefs.h"
 
 namespace ads {
 namespace ccpp {
 namespace turn_cost {
 
-const double UShaped::pi = static_cast<AngleRad>(boost::units::degree::degree * 180).value();
+constexpr static double pi = static_cast<quantity::Radians>(units::Degree * 180).value();
+
+UShaped::UShaped(const double turnWeight, const double headlandWeight1, const double headlandWeight2)
+    : m_weight1(turnWeight), m_weight2(headlandWeight1), m_weight3(headlandWeight2)
+{
+
+}
+
+ double UShaped::_calculateTurnCost(const geometry::ConstReferringSegment2d& segment, const quantity::Radians travelAngle) const
+{
+    namespace bg = boost::geometry;
+
+    const double dy = bg::get<0, 1>(segment) - bg::get<1, 1>(segment);
+    const double dx = bg::get<0, 0>(segment) - bg::get<1, 0>(segment);
+    const double segmentAngle = std::atan2(dy, dx);
+
+    const double angleDelta = fixAngle(travelAngle.value() - segmentAngle);
+    const double segmentLength = bg::length(segment);
+
+    // Headland term goes to 0 if direction of travel is parallel
+    // to line segment. Original equation would have been w/tan(0) in that case,
+    // which is a div by 0 error. But logically, there's no cost for edges you don't
+    // turn around on.
+    const double headlandTerm = angleDelta < 0.00001 ? 0 : segmentLength * std::abs(std::cos(angleDelta)) / 2.;
+    const double turnTerm = pi * segmentLength * std::sin(angleDelta) / 4.;
+
+    return turnTerm * m_weight1 + headlandTerm * m_weight2 + headlandTerm * m_weight3;
+}
+
 
 double UShaped::fixAngle(double radians) const
 {
@@ -27,13 +48,6 @@ double UShaped::fixAngle(double radians) const
     }
     return std::abs(radians);
 }
-
-UShaped::UShaped(const double turnWeight, const double headlandWeight1, const double headlandWeight2)
-    : m_weight1(turnWeight), m_weight2(headlandWeight1), m_weight3(headlandWeight2)
-{
-
-}
-
 }
 }
 }

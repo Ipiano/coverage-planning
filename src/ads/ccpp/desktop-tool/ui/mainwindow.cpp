@@ -169,17 +169,19 @@ void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::radian> &shape)
     m_rawShape = createItem(shapeXY);
 
     ccpp::turn_cost::UShaped turnCost(1/0.5, 1/2., 1/2.);
-    ccpp::initial_cost::MinAcrossAngles<ccpp::turn_cost::UShaped> initialCost(turnCost);
-    const auto initialResult = initialCost(shapeXY);
-    m_sweepDir = initialResult.second;
+    ccpp::optimal_direction::MinAcrossAngles dirCalculator(turnCost);
+
+    ccpp::initial_cost::MinAcrossAngles initialCost(dirCalculator);
+    const auto initialResult = initialCost.calculateInitialDirection(shapeXY);
+    m_sweepDir = initialResult;
 
     const auto rect = m_rawShape->boundingRect();
     const auto diag = std::sqrt(rect.width()*rect.width() + rect.height()*rect.height());
-    m_initialDirArrow = createArrow(bg::make_zero<ccpp::geometry::Point2d>(), 0.25*diag, initialResult.second);
+    m_initialDirArrow = createArrow(bg::make_zero<ccpp::geometry::Point2d>(), 0.25*diag, initialResult);
 
     const ccpp::DoublyConnectedEdgeList dcel(shapeXY);
     auto edges = dcel.edges(dcel.insideFace());
-    ccpp::sortEdges(edges, initialResult.second);
+    ccpp::sortEdges(edges, initialResult);
     m_sweepPath = createSweepPath(edges);
 
     m_scene->addItem(m_rawShape);

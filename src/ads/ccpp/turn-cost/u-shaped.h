@@ -1,25 +1,22 @@
 #pragma once
 
-#include <boost/geometry/geometries/point_xy.hpp>
-#include <boost/geometry/geometries/segment.hpp>
-#include <boost/geometry/core/access.hpp>
-#include <boost/geometry/algorithms/length.hpp>
-
-#include <boost/units/systems/si/plane_angle.hpp>
-#include <boost/units/systems/angle/degrees.hpp>
-#include <boost/units/systems/si/io.hpp>
+#include "ads/ccpp/typedefs.h"
+#include "ads/ccpp/interfaces/turn-cost-calculator-if.h"
 
 namespace ads {
 namespace ccpp {
 namespace turn_cost {
 
-class UShaped
+class UShaped : public interfaces::TurnCostCalculatorIf
 {
-    typedef boost::units::quantity<boost::units::si::plane_angle> AngleRad;
-    typedef boost::units::quantity<boost::units::degree::plane_angle> AngleDeg;
+  public:
+    UShaped() : UShaped(2, 0.5, 0.5){}
+    UShaped(const double turnWeight, const double headlandWeight1, const double headlandWeight2);
 
-    const static double pi;
+  protected:
+    double _calculateTurnCost(const geometry::ConstReferringSegment2d& segment, const quantity::Radians travelAngle) const override;
 
+   private:
     double m_weight1;
     double m_weight2;
     double m_weight3;
@@ -28,32 +25,6 @@ class UShaped
     // by first adding a multiple of pi to get to the range
     // [-90, 90] and then returning the absolute value
     double fixAngle(double radians) const;
-
-public:
-    UShaped(const double turnWeight=1., const double headlandWeight1 = 1., const double headlandWeight2 = 1.);
-
-    template<class Segment2d>
-    double operator()(const Segment2d& segment, const AngleRad& travelAngle) const
-    {
-        namespace bg = boost::geometry;
-        namespace bu = boost::units;
-
-        const double dy = bg::get<0, 1>(segment) - bg::get<1, 1>(segment);
-        const double dx = bg::get<0, 0>(segment) - bg::get<1, 0>(segment);
-        const double segmentAngle = std::atan2(dy, dx);
-
-        const double angleDelta = fixAngle(travelAngle.value() - segmentAngle);
-        const double segmentLength = bg::length(segment);
-
-        // Headland term goes to 0 if direction of travel is parallel
-        // to line segment. Original equation would have been w/tan(0) in that case,
-        // which is a div by 0 error. But logically, there's no cost for edges you don't
-        // turn around on.
-        const double headlandTerm = angleDelta < 0.00001 ? 0 : segmentLength * std::abs(std::cos(angleDelta)) / 2.;
-        const double turnTerm = pi * segmentLength * std::sin(angleDelta) / 4.;
-
-        return turnTerm * m_weight1 + headlandTerm * m_weight2 + headlandTerm * m_weight3;
-    }
 };
 
 }

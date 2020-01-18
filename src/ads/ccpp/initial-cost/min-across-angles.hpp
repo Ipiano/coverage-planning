@@ -6,44 +6,40 @@
 #include <boost/concept/assert.hpp>
 #include <boost/concept_check.hpp>
 
-#include "ads/ccpp/optimal-direction/min-across-angles.hpp"
-#include "ads/ccpp/turn-cost/turn-cost-concept.h"
+#include "ads/ccpp/optimal-direction/min-across-angles.h"
+#include "ads/ccpp/interfaces/optimal-direction-calculator-if.h"
 
 namespace ads {
 namespace ccpp {
 namespace initial_cost {
 
-template<class TurnCostCalculator>
 class MinAcrossAngles
 {
     quantity::Radians m_increment;
-    TurnCostCalculator m_turnCalculator;
+    const interfaces::OptimalDirectionCalculatorIf& m_directionCalculator;
 
 public:
-    BOOST_CONCEPT_ASSERT((turn_cost::TurnCostConcept<TurnCostCalculator>));
-    BOOST_CONCEPT_ASSERT((boost::Assignable<TurnCostCalculator>));
-
-    MinAcrossAngles(TurnCostCalculator turnCalculator, const quantity::Radians increment)
+    MinAcrossAngles(const interfaces::OptimalDirectionCalculatorIf& dirCalculator, const quantity::Radians increment)
         : m_increment(increment)
-        , m_turnCalculator(turnCalculator)
+        , m_directionCalculator(dirCalculator)
     {
     }
 
-    MinAcrossAngles(TurnCostCalculator turnCalculator, const quantity::Degrees increment = 1.0*units::Degree)
-        : MinAcrossAngles(turnCalculator, static_cast<quantity::Radians>(increment))
+    MinAcrossAngles(const interfaces::OptimalDirectionCalculatorIf& dirCalculator, const quantity::Degrees increment = 1.0*units::Degree)
+        : MinAcrossAngles(dirCalculator, static_cast<quantity::Radians>(increment))
     {
     }
 
-    std::pair<double, quantity::Radians> operator()(const geometry::Polygon2d& poly) const
+    quantity::Radians calculateInitialDirection(const geometry::Polygon2d& poly) const
     {
         const static auto quarterTurn = static_cast<quantity::Radians>(units::Degree * 90);
 
         const auto optimalDirResult =
-            optimal_direction::MinAcrossAngles<TurnCostCalculator>(m_turnCalculator, m_increment)(poly);
+            m_directionCalculator.calculateOptimalDirection(poly);
 
         // Return same cost, but normal to the optimal direction
         // as the sweep dir
-        return {optimalDirResult.first, optimalDirResult.second + quarterTurn};
+        return optimalDirResult + quarterTurn;
     }
 };
 

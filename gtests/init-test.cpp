@@ -1,5 +1,5 @@
 #include "ads/ccpp/ccpp.h"
-#include "ads/ccpp/decomposition/modified-trapezoidal.hpp"
+#include "ads/ccpp/polygon-decomposer/modified-trapezoidal.h"
 
 #include <gtest/gtest.h>
 
@@ -16,5 +16,4 @@ typedef bg::model::polygon<PointType> PolygonType;
 
 TEST(CCPPTests, CanInstantiate)
 {
-
 }
