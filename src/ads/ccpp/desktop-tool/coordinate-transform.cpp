@@ -6,7 +6,6 @@ namespace ccpp
 {
 namespace desktop_tool
 {
-
 }
 }
 }

@@ -2,13 +2,16 @@
 
 #include "ads/ccpp/typedefs.h"
 
-namespace ads {
-namespace ccpp {
-namespace interfaces {
+namespace ads
+{
+namespace ccpp
+{
+namespace interfaces
+{
 
 class TurnCostCalculatorIf
 {
-public:
+  public:
     virtual ~TurnCostCalculatorIf() = default;
 
     // Wrappers for all segment types because you can't do virtual inheritance on template functions
@@ -27,7 +30,6 @@ public:
     }
 
   protected:
-
     /*!
      * \brief Calculates the cost associated with turnarounds for an edge of a field
      *
@@ -37,9 +39,7 @@ public:
      * \return Total cost associated with all turnarounds on the edge for this direction
      */
     virtual double _calculateTurnCost(const geometry::ConstReferringSegment2d& edge, const quantity::Radians swathDir) const = 0;
-
 };
-
 }
 }
 }

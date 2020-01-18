@@ -9,14 +9,15 @@
 
 namespace bg = boost::geometry;
 
-namespace ads {
-namespace ccpp {
-namespace polygon_decomposer {
-
+namespace ads
+{
+namespace ccpp
+{
+namespace polygon_decomposer
+{
 
 void ModifiedTrapezoidal::decompose(std::vector<const dcel::const_half_edge_t*>& sortedEdges, DoublyConnectedEdgeList& dcel) const
 {
-
 }
 
 void ModifiedTrapezoidal::decomposePolygon(DoublyConnectedEdgeList& dcel) const
@@ -27,7 +28,6 @@ void ModifiedTrapezoidal::decomposePolygon(DoublyConnectedEdgeList& dcel) const
 
     decompose(edges, dcel);
 }
-
 }
 }
 }

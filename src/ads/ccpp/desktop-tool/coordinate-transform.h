@@ -9,8 +9,7 @@ namespace ccpp
 namespace desktop_tool
 {
 
-template<class PointT1, class PointT2>
-PointT1 cast_point(const PointT2& p1)
+template <class PointT1, class PointT2> PointT1 cast_point(const PointT2& p1)
 {
     static_assert(boost::geometry::dimension<PointT1>::value == 2, "Cannot cast non-2d geometry");
     static_assert(boost::geometry::dimension<PointT2>::value == 2, "Cannot cast non-2d geometry");
@@ -18,8 +17,7 @@ PointT1 cast_point(const PointT2& p1)
     return boost::geometry::make<PointT1>(boost::geometry::get<0>(p1), boost::geometry::get<1>(p1));
 }
 
-template<class RingT1, class RingT2>
-RingT1 cast_ring(const RingT2& r1)
+template <class RingT1, class RingT2> RingT1 cast_ring(const RingT2& r1)
 {
     RingT1 r2;
     r2.resize(r1.size());
@@ -32,8 +30,7 @@ RingT1 cast_ring(const RingT2& r1)
     return r2;
 }
 
-template<class PolygonT1, class PolygonT2>
-PolygonT1 cast_polygon(const PolygonT2& p1)
+template <class PolygonT1, class PolygonT2> PolygonT1 cast_polygon(const PolygonT2& p1)
 {
     PolygonT1 p2;
 
@@ -47,7 +44,6 @@ PolygonT1 cast_polygon(const PolygonT2& p1)
 
     return p2;
 }
-
 }
 }
 }

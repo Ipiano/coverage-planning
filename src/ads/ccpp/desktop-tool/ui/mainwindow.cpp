@@ -36,7 +36,7 @@ namespace bu = boost::units;
 
 QGraphicsItem* createItem(const ccpp::geometry::Polygon2d& poly);
 QGraphicsItem* createItem(const ccpp::geometry::Ring2d& ring);
-QGraphicsItem* createArrow(const ccpp::geometry::Point2d& origin, const double &length, const quantity::Radians &angle);
+QGraphicsItem* createArrow(const ccpp::geometry::Point2d& origin, const double& length, const quantity::Radians& angle);
 QGraphicsItem* createSweepPath(const std::vector<const dcel::const_half_edge_t*> edges);
 
 QPointF makePoint(const ccpp::geometry::Point2d& pt)
@@ -44,9 +44,8 @@ QPointF makePoint(const ccpp::geometry::Point2d& pt)
     return {bg::get<0>(pt), bg::get<1>(pt)};
 }
 
-MainWindow::MainWindow(const QVector<std::shared_ptr<ImportShapeInterfaceFactory> > &shapeImporters, QWidget *parent) :
-    QMainWindow(parent),
-    m_ui(new Ui::MainWindow)
+MainWindow::MainWindow(const QVector<std::shared_ptr<ImportShapeInterfaceFactory>>& shapeImporters, QWidget* parent)
+    : QMainWindow(parent), m_ui(new Ui::MainWindow)
 {
     m_ui->setupUi(this);
 
@@ -60,13 +59,13 @@ MainWindow::MainWindow(const QVector<std::shared_ptr<ImportShapeInterfaceFactory
     connect(m_ui->checkBox_sweepOrder, &QCheckBox::clicked, this, &MainWindow::updateView);
     connect(m_ui->checkBox_rotate, &QCheckBox::clicked, this, &MainWindow::updateView);
 
-    for(const auto& importer : shapeImporters)
+    for (const auto& importer : shapeImporters)
     {
-        std::shared_ptr<ImportShapeInterface> shared(importer->create(), [importer](ImportShapeInterface* ptr){importer->destroy(ptr);});
+        std::shared_ptr<ImportShapeInterface> shared(importer->create(), [importer](ImportShapeInterface* ptr) { importer->destroy(ptr); });
 
-        for(const QString& pattern : shared->fileTypes())
+        for (const QString& pattern : shared->fileTypes())
         {
-            if(!m_importers.contains(pattern))
+            if (!m_importers.contains(pattern))
             {
                 m_importers[pattern] = shared;
             }
@@ -84,7 +83,7 @@ MainWindow::~MainWindow()
 
 void MainWindow::loadFile()
 {
-    if(m_importers.isEmpty())
+    if (m_importers.isEmpty())
     {
         QErrorMessage msg(this);
         msg.showMessage("No import plugins loaded");
@@ -92,18 +91,18 @@ void MainWindow::loadFile()
     }
 
     QString filter;
-    for(const QString& s : m_importers.keys())
+    for (const QString& s : m_importers.keys())
         filter += s + ";;";
-    filter = filter.left(filter.size()-2);
+    filter = filter.left(filter.size() - 2);
 
     QFileDialog dialog(this, "Load Shape", m_defaultFilePath, filter);
     dialog.exec();
 
-    if(!dialog.selectedFiles().size())
+    if (!dialog.selectedFiles().size())
         return;
 
     const auto chosen = QFileInfo(dialog.selectedFiles()[0]);
-    if(!chosen.exists() || !chosen.isFile())
+    if (!chosen.exists() || !chosen.isFile())
         return;
 
     const QString selectedFilter = dialog.selectedNameFilter();
@@ -111,7 +110,7 @@ void MainWindow::loadFile()
     m_defaultFilePath = chosen.dir().path();
 
     const auto maybeShape = m_importers.value(selectedFilter)->importShape(chosen);
-    if(!maybeShape.first)
+    if (!maybeShape.first)
     {
         QErrorMessage msg(this);
         msg.showMessage("Unable to load shape");
@@ -125,7 +124,7 @@ void MainWindow::loadFile()
 
 void MainWindow::updateView()
 {
-    if(!m_rawShape)
+    if (!m_rawShape)
         return;
 
     m_rawShape->setVisible(m_ui->checkBox_rawShape->checkState() == Qt::CheckState::Checked);
@@ -136,9 +135,9 @@ void MainWindow::updateView()
     QTransform transform(1, 0, 0, 0, -1, 0, 0, 0, 1);
 
     // Maybe rotate so that sweep direction is up
-    if(m_ui->checkBox_rotate->checkState() == Qt::CheckState::Checked)
+    if (m_ui->checkBox_rotate->checkState() == Qt::CheckState::Checked)
     {
-        const static auto vertical = static_cast<quantity::Radians>(units::Degree*90);
+        const static auto vertical = static_cast<quantity::Radians>(units::Degree * 90);
         transform.rotate(static_cast<quantity::Degrees>(-(m_sweepDir - vertical)).value());
     }
 
@@ -146,7 +145,7 @@ void MainWindow::updateView()
     m_ui->graphicsView->fitInView(m_scene->itemsBoundingRect(), Qt::AspectRatioMode::KeepAspectRatio);
 }
 
-void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::radian> &shape)
+void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::radian>& shape)
 {
     m_scene->clear();
 
@@ -166,18 +165,18 @@ void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::radian> &shape)
     bg::transform(shapeXY2, shapeXY1, scale);
 
     const auto& shapeXY = shapeXY1;
-    m_rawShape = createItem(shapeXY);
+    m_rawShape          = createItem(shapeXY);
 
-    ccpp::turn_cost::UShaped turnCost(1/0.5, 1/2., 1/2.);
+    ccpp::turn_cost::UShaped turnCost(1 / 0.5, 1 / 2., 1 / 2.);
     ccpp::optimal_direction::MinAcrossAngles dirCalculator(turnCost);
 
     ccpp::initial_cost::MinAcrossAngles initialCost(dirCalculator);
     const auto initialResult = initialCost.calculateInitialDirection(shapeXY);
-    m_sweepDir = initialResult;
+    m_sweepDir               = initialResult;
 
-    const auto rect = m_rawShape->boundingRect();
-    const auto diag = std::sqrt(rect.width()*rect.width() + rect.height()*rect.height());
-    m_initialDirArrow = createArrow(bg::make_zero<ccpp::geometry::Point2d>(), 0.25*diag, initialResult);
+    const auto rect   = m_rawShape->boundingRect();
+    const auto diag   = std::sqrt(rect.width() * rect.width() + rect.height() * rect.height());
+    m_initialDirArrow = createArrow(bg::make_zero<ccpp::geometry::Point2d>(), 0.25 * diag, initialResult);
 
     const ccpp::DoublyConnectedEdgeList dcel(shapeXY);
     auto edges = dcel.edges(dcel.insideFace());
@@ -195,7 +194,7 @@ QGraphicsItem* createItem(const ccpp::geometry::Polygon2d& poly)
 {
     auto shapeGroup = new QGraphicsItemGroup();
     shapeGroup->addToGroup(createItem(poly.outer()));
-    for(const auto& ring : poly.inners())
+    for (const auto& ring : poly.inners())
     {
         shapeGroup->addToGroup(createItem(ring));
     }
@@ -207,10 +206,8 @@ QGraphicsItem* createItem(const ccpp::geometry::Ring2d& ring)
 {
     QPolygonF qRing(int(ring.size()));
 
-    std::transform(ring.begin(), ring.end(), qRing.begin(), [](const ccpp::geometry::Point2d& pt)
-                   {
-                       return QPointF(bg::get<0>(pt), bg::get<1>(pt));
-                   });
+    std::transform(ring.begin(), ring.end(), qRing.begin(),
+                   [](const ccpp::geometry::Point2d& pt) { return QPointF(bg::get<0>(pt), bg::get<1>(pt)); });
 
     QGraphicsPolygonItem* ringGraphic = new QGraphicsPolygonItem(qRing);
     ringGraphic->setPen(QPen(QBrush(QColor()), 5));
@@ -228,17 +225,19 @@ QGraphicsItem* createArrow(const ccpp::geometry::Point2d& origin, const double& 
     const QPointF qTip(bg::get<0>(tip), bg::get<1>(tip));
     path.lineTo(qTip);
 
-    const auto offset = static_cast<quantity::Radians>(5*bu::degree::degree);
+    const auto offset = static_cast<quantity::Radians>(5 * bu::degree::degree);
 
-    ccpp::geometry::Point2d left = bg::make<ccpp::geometry::Point2d>(std::cos((angle+offset).value()), std::sin((angle+offset).value()));
-    bg::multiply_value(left, length*0.8);
+    ccpp::geometry::Point2d left =
+        bg::make<ccpp::geometry::Point2d>(std::cos((angle + offset).value()), std::sin((angle + offset).value()));
+    bg::multiply_value(left, length * 0.8);
     bg::add_point(left, origin);
 
     path.lineTo({bg::get<0>(left), bg::get<1>(left)});
     path.lineTo(qTip);
 
-    ccpp::geometry::Point2d right = bg::make<ccpp::geometry::Point2d>(std::cos((angle-offset).value()), std::sin((angle-offset).value()));
-    bg::multiply_value(right, length*0.8);
+    ccpp::geometry::Point2d right =
+        bg::make<ccpp::geometry::Point2d>(std::cos((angle - offset).value()), std::sin((angle - offset).value()));
+    bg::multiply_value(right, length * 0.8);
     bg::add_point(right, origin);
 
     path.lineTo({bg::get<0>(right), bg::get<1>(right)});
@@ -256,7 +255,7 @@ QGraphicsItem* createSweepPath(const std::vector<const dcel::const_half_edge_t*>
     path.addEllipse(makePoint(edges[0]->origin->location), 10, 10);
     path.moveTo(makePoint(edges[0]->origin->location));
 
-    for(const auto& edge : edges)
+    for (const auto& edge : edges)
     {
         const auto& pt = edge->origin->location;
         path.lineTo(makePoint(pt));
@@ -267,7 +266,6 @@ QGraphicsItem* createSweepPath(const std::vector<const dcel::const_half_edge_t*>
 
     return pathItem;
 }
-
 }
 }
 }

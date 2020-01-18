@@ -4,13 +4,16 @@
 
 #include <vector>
 
-namespace ads {
-namespace ccpp {
-namespace interfaces {
+namespace ads
+{
+namespace ccpp
+{
+namespace interfaces
+{
 
 class PolygonDecomposerIf
 {
-public:
+  public:
     virtual ~PolygonDecomposerIf() = default;
 
     /*!

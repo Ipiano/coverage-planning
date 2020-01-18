@@ -4,23 +4,25 @@
 #include "ads/ccpp/dcel.h"
 #include "ads/ccpp/typedefs.h"
 
-namespace ads {
-namespace ccpp {
-namespace polygon_decomposer {
+namespace ads
+{
+namespace ccpp
+{
+namespace polygon_decomposer
+{
 
 class ModifiedTrapezoidal : public interfaces::PolygonDecomposerIf
 {
-public:
+  public:
     ModifiedTrapezoidal(const quantity::Radians sweepDir);
 
     void decomposePolygon(DoublyConnectedEdgeList& dcel) const override;
 
-private:
+  private:
     quantity::Radians m_sweepDir;
 
-    void decompose(std::vector<const dcel::const_half_edge_t *> &sortedEdges, DoublyConnectedEdgeList& dcel) const;
+    void decompose(std::vector<const dcel::const_half_edge_t*>& sortedEdges, DoublyConnectedEdgeList& dcel) const;
 };
-
 }
 }
 }

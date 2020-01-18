@@ -2,17 +2,18 @@
 
 #include <boost/geometry.hpp>
 
-namespace ads {
-namespace ccpp {
+namespace ads
+{
+namespace ccpp
+{
 
-template <class BoostPolygonType>
-class SwathPlanner
+template <class BoostPolygonType> class SwathPlanner
 {
     //typedef PolygonDecomposer<BoostPolygonType> DecomposerType;
 
-    public:
-        SwathPlanner() {}
+  public:
+    SwathPlanner() {}
 };
 
-}  // namespace ccpp
-}  // namespace ads
+} // namespace ccpp
+} // namespace ads

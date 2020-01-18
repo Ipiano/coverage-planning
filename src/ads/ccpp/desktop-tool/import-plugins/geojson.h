@@ -13,7 +13,7 @@ namespace import_plugins
 
 class GeojsonImporter : public QObject, public ImportShapeInterface
 {
-public:
+  public:
     GeojsonImporter();
 
     virtual QStringList fileTypes() const override;
@@ -27,11 +27,10 @@ class GeojsonImporterFactory : public QObject, public ImportShapeInterfaceFactor
     Q_PLUGIN_METADATA(IID "ads.ccpp.desktop-tool.ImportShapeInterfaceFactory")
     Q_INTERFACES(ads::ccpp::desktop_tool::ImportShapeInterfaceFactory)
 
-public:
+  public:
     ImportShapeInterface* create() const override;
     void destroy(ImportShapeInterface* importer) const override;
 };
-
 }
 }
 }

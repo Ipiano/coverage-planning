@@ -8,13 +8,16 @@
 
 #include "ads/ccpp/typedefs.h"
 
-namespace ads {
-namespace ccpp {
-namespace interfaces {
+namespace ads
+{
+namespace ccpp
+{
+namespace interfaces
+{
 
 class OptimalDirectionCalculatorIf
 {
-public:
+  public:
     virtual ~OptimalDirectionCalculatorIf() = default;
 
     /*!
@@ -29,7 +32,6 @@ public:
      */
     virtual quantity::Radians calculateOptimalDirection(const geometry::Polygon2d& field) const = 0;
 };
-
 }
 }
 }

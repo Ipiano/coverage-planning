@@ -8,7 +8,6 @@ namespace ads
 namespace ccpp
 {
 
-void sortEdges(std::vector<const dcel::const_half_edge_t *> &edges, const quantity::Radians sweepDir);
-
+void sortEdges(std::vector<const dcel::const_half_edge_t*>& edges, const quantity::Radians sweepDir);
 }
 }

@@ -24,7 +24,6 @@ namespace import_plugins
 
 GeojsonImporter::GeojsonImporter()
 {
-
 }
 
 QStringList GeojsonImporter::fileTypes() const
@@ -39,36 +38,35 @@ bool isPolygon(const QJsonObject& object)
 
 std::pair<bool, geometry::GeoRing2d<bg::radian>> convertPoly(const QJsonArray& coords)
 {
-    if(coords.size() < 3)
+    if (coords.size() < 3)
         return {false, {}};
 
     geometry::GeoRing2d<bg::radian> ring;
     ring.resize(uint32_t(coords.size()));
 
-    std::transform(coords.begin(), coords.end(), ring.begin(), [](const QJsonValue& coordArr)
-                   {
-                       const QJsonArray coords = coordArr.toArray();
-                       return boost::geometry::make<geometry::GeoPoint2d<bg::radian>>
-                           (static_cast<quantity::Radians>(units::Degree * coords.at(0).toDouble()).value(),
-                            static_cast<quantity::Radians>(units::Degree * coords.at(1).toDouble()).value());
-                   });
+    std::transform(coords.begin(), coords.end(), ring.begin(), [](const QJsonValue& coordArr) {
+        const QJsonArray coords = coordArr.toArray();
+        return boost::geometry::make<geometry::GeoPoint2d<bg::radian>>(
+            static_cast<quantity::Radians>(units::Degree * coords.at(0).toDouble()).value(),
+            static_cast<quantity::Radians>(units::Degree * coords.at(1).toDouble()).value());
+    });
 
-    if(boost::geometry::distance(ring.front(), ring.back()) > 0.0001)
+    if (boost::geometry::distance(ring.front(), ring.back()) > 0.0001)
     {
         ring.push_back(ring.front());
     }
 
-    if(ring.size() == 3)
+    if (ring.size() == 3)
         return {false, {}};
 
     return {true, std::move(ring)};
 }
 
-std::pair<bool, geometry::GeoPolygon2d<boost::geometry::radian> > GeojsonImporter::importShape(const QFileInfo& fileInfo) const
+std::pair<bool, geometry::GeoPolygon2d<boost::geometry::radian>> GeojsonImporter::importShape(const QFileInfo& fileInfo) const
 {
     QFile fileData(fileInfo.filePath());
 
-    if(!fileData.open(QIODevice::ReadOnly))
+    if (!fileData.open(QIODevice::ReadOnly))
     {
         qWarning() << "Failed to open file" << fileInfo.path();
         return {false, {}};
@@ -80,7 +78,7 @@ std::pair<bool, geometry::GeoPolygon2d<boost::geometry::radian> > GeojsonImporte
     QJsonParseError err;
     const auto jsonDoc = QJsonDocument::fromJson(byteData, &err);
 
-    if(err.error != QJsonParseError::NoError)
+    if (err.error != QJsonParseError::NoError)
     {
         qWarning() << QString("Error parsing %1: %2 (%3) @ %4")
                           .arg(fileData.fileName())
@@ -90,7 +88,7 @@ std::pair<bool, geometry::GeoPolygon2d<boost::geometry::radian> > GeojsonImporte
         return {false, {}};
     }
 
-    if(!jsonDoc.isObject())
+    if (!jsonDoc.isObject())
     {
         qWarning() << "File" << fileData.fileName() << "is not a json object file";
         return {false, {}};
@@ -99,18 +97,18 @@ std::pair<bool, geometry::GeoPolygon2d<boost::geometry::radian> > GeojsonImporte
     const auto object = jsonDoc.object();
     QJsonObject featureObject;
 
-    if(isPolygon(object))
+    if (isPolygon(object))
     {
         featureObject = object;
     }
     else
     {
         QJsonArray featureList = object["features"].toArray();
-        for(const QJsonValueRef feature : featureList)
+        for (const QJsonValueRef feature : featureList)
         {
-            if(isPolygon(feature.toObject()))
+            if (isPolygon(feature.toObject()))
             {
-                if(!featureObject.empty())
+                if (!featureObject.empty())
                 {
                     qWarning() << "File" << fileData.fileName() << "contains multiple polygons";
                     return {false, {}};
@@ -121,11 +119,11 @@ std::pair<bool, geometry::GeoPolygon2d<boost::geometry::radian> > GeojsonImporte
     }
 
     const QJsonObject geometry = featureObject["geometry"].toObject();
-    const QJsonArray coords = geometry["coordinates"].toArray();
+    const QJsonArray coords    = geometry["coordinates"].toArray();
 
     geometry::GeoPolygon2d<bg::radian> result;
     const auto maybeOuter = convertPoly(coords.at(0).toArray());
-    if(!maybeOuter.first)
+    if (!maybeOuter.first)
     {
         qWarning() << "File" << fileData.fileName() << "has invalid exterior polygon ring";
         return {false, {}};
@@ -133,10 +131,10 @@ std::pair<bool, geometry::GeoPolygon2d<boost::geometry::radian> > GeojsonImporte
 
     result.outer() = std::move(maybeOuter.second);
 
-    for(int i=1; i < coords.size(); i++)
+    for (int i = 1; i < coords.size(); i++)
     {
         const auto maybeInner = convertPoly(coords.at(i).toArray());
-        if(!maybeInner.first)
+        if (!maybeInner.first)
         {
             qWarning() << "File" << fileData.fileName() << "has invalid inner polygon ring at index" << i;
             return {false, {}};
@@ -157,7 +155,6 @@ void GeojsonImporterFactory::destroy(ImportShapeInterface* importer) const
 {
     delete importer;
 }
-
 }
 }
 }

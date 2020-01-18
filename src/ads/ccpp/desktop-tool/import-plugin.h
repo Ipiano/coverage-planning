@@ -8,14 +8,17 @@
 
 #include "ads/ccpp/desktop-tool/typedefs.h"
 
-namespace ads {
-namespace ccpp {
-namespace desktop_tool {
+namespace ads
+{
+namespace ccpp
+{
+namespace desktop_tool
+{
 
 class ImportShapeInterface
 {
-public:
-    virtual ~ImportShapeInterface(){}
+  public:
+    virtual ~ImportShapeInterface() {}
 
     // Return the list of file extentions that this
     // plugin can parse
@@ -37,13 +40,12 @@ public:
 
 class ImportShapeInterfaceFactory
 {
-public:
-    virtual ~ImportShapeInterfaceFactory(){}
+  public:
+    virtual ~ImportShapeInterfaceFactory() {}
 
-    virtual ImportShapeInterface* create() const = 0;
+    virtual ImportShapeInterface* create() const      = 0;
     virtual void destroy(ImportShapeInterface*) const = 0;
 };
-
 }
 }
 }
