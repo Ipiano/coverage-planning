@@ -137,8 +137,7 @@ void MainWindow::updateView()
     // Maybe rotate so that sweep direction is up
     if (m_ui->checkBox_rotate->checkState() == Qt::CheckState::Checked)
     {
-        const static auto vertical = static_cast<quantity::Radians>(units::Degree * 90);
-        transform.rotate(static_cast<quantity::Degrees>(-(m_sweepDir - vertical)).value());
+        transform.rotate(static_cast<quantity::Degrees>(m_sweepDir).value());
     }
 
     m_ui->graphicsView->setTransform(transform);
