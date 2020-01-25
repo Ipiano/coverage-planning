@@ -7,8 +7,8 @@ HEADERS += \
     $$CCPP_ROOT/ccpp.h \
     $$CCPP_ROOT/dcel.h \
     $$CCPP_ROOT/typedefs.h \
-    $$CCPP_ROOT/sort-edges.h \
     $$CCPP_ROOT/angle-cost-sum.hpp \
+    $$CCPP_ROOT/coordinate-transform.hpp \
     \
     $$CCPP_ROOT/interfaces/polygon-decomposer-if.h \
     $$CCPP_ROOT/interfaces/initial-cost-calculator-if.h \
@@ -22,9 +22,7 @@ HEADERS += \
 
 
 SOURCES += \
-    $$CCPP_ROOT/dcel.cpp \
-    $$CCPP_ROOT/sort-edges.cpp \
     $$CCPP_ROOT/optimal-direction/min-across-angles.cpp \
     \
     $$CCPP_ROOT/turn-cost/u-shaped.cpp \
-    $$CCPP_ROOT/polygon-decomposer/modified-trapezoidal.cpp \
+    $$CCPP_ROOT/polygon-decomposer/modified-trapezoidal.cpp

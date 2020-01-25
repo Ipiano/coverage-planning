@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ads/ccpp/typedefs.h"
 #include "ads/ccpp/dcel.h"
 
 #include <vector>
@@ -17,10 +18,14 @@ class PolygonDecomposerIf
     virtual ~PolygonDecomposerIf() = default;
 
     /*!
-     * \brief decomposePolygon
-     * \param dcel
+     * \brief Decomposes a polygon into approximately trapezoidal regions
+     * \param[in] poly - Polygon to decompose
+     *
+     * \returns A DoublyConnectedEdgeList which represents all the regions produced
+     *
+     * \throws std::invalid_argument if the given polygon is malformed
      */
-    virtual void decomposePolygon(DoublyConnectedEdgeList& dcel) const = 0;
+    virtual DoublyConnectedEdgeList decomposePolygon(const geometry::Polygon2d& poly) const = 0;
 };
 }
 }
