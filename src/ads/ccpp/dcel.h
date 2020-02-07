@@ -23,7 +23,7 @@ struct vertex_t
     operator const geometry::Point2d&() const { return location; }
 };
 
-struct face_t
+struct region_t
 {
     half_edge_t* edge = nullptr;
 };
@@ -34,15 +34,15 @@ struct half_edge_t
     half_edge_t* next = nullptr;
     half_edge_t* prev = nullptr;
     vertex_t* origin  = nullptr;
-    face_t* face      = nullptr;
+    region_t* region  = nullptr;
 };
 }
 
 struct DoublyConnectedEdgeList
 {
-    std::vector<std::shared_ptr<dcel::face_t>> faces;
-    std::vector<std::shared_ptr<dcel::half_edge_t>> edges;
-    std::vector<std::shared_ptr<dcel::vertex_t>> vertices;
+    std::vector<std::unique_ptr<dcel::region_t>> regions;
+    std::vector<std::unique_ptr<dcel::half_edge_t>> edges;
+    std::vector<std::unique_ptr<dcel::vertex_t>> vertices;
 };
 }
 }
