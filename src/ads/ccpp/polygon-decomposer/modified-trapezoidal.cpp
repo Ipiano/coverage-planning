@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <vector>
 #include <unordered_set>
+#include <queue>
 
 namespace bg = boost::geometry;
 
@@ -52,6 +53,17 @@ bool vertexLessThan(const dcel::vertex_t& left, const dcel::vertex_t& right)
         return left.location.y() < right.location.y();
 };
 
+template <class SegmentT> geometry::Point2d unit(const SegmentT s)
+{
+    const double mag = bg::distance(s.first, s.second);
+
+    geometry::Point2d unitV = s.second;
+    bg::subtract_point(unitV, s.first);
+    bg::divide_value(unitV, mag);
+
+    return unitV;
+}
+
 struct angleLessThan
 {
     // Sorts two edges based on their angles;
@@ -63,13 +75,7 @@ struct angleLessThan
   private:
     geometry::Point2d unit(const Edge* e) const
     {
-        const double mag = bg::distance(e->first->location, e->second->location);
-
-        geometry::Point2d unitV = e->second->location;
-        bg::subtract_point(unitV, e->first->location);
-        bg::divide_value(unitV, mag);
-
-        return unitV;
+        return polygon_decomposer::unit(geometry::ConstReferringSegment2d(e->first->location, e->second->location));
     }
 
     double valueOf(const Edge* e) const { return bg::dot_product(unit(e), geometry::Point2d{0, 1}); }
@@ -82,12 +88,44 @@ bool edgeLessThan(const std::unique_ptr<Edge>& left, const std::unique_ptr<Edge>
     return vertexLessThan(*left->first, *right->first);
 }
 
+// For the sake of the active edge list, we keep track of them 'vertically'
+// by checking if a point on the second is to the left of a point on the other
+// line. If this is the case then we know the second one must be 'above' the first
+// one for its entire distance because there are now intersections
 bool activeEdgeLessThan(const Edge* l, const Edge* r)
 {
-    if (l->first == r->first)
-        return angleLessThan()(l, r);
-    return l->first->location.y() < r->first->location.y();
+    // Make unit vectors out of the edges; and check dot products
+    const auto unitL1L2   = unit(geometry::ConstReferringSegment2d(l->first->location, l->second->location));
+    const auto normalL1L2 = geometry::Point2d{-unitL1L2.y(), unitL1L2.x()};
+    const auto unitL1R1   = unit(geometry::ConstReferringSegment2d(l->first->location, r->first->location));
+    const auto unitL1R2   = unit(geometry::ConstReferringSegment2d(l->first->location, r->second->location));
+
+    // TODO: Use different epsilon?
+    if (r->first == l->first || r->first == l->second || std::abs(bg::dot_product(normalL1L2, unitL1R1) - 1) < 0.00001)
+        return bg::dot_product(normalL1L2, unitL1R2) > 0;
+    return bg::dot_product(normalL1L2, unitL1R1) > 0;
 }
+
+// List of unfinished edges sorted in sweep line order
+// by the second point on the segments
+//
+// TODO: Maybe build on priority_queue
+class UnfinishedEdgeList
+{
+    std::vector<Edge*> m_edges;
+
+  public:
+    size_t size() const { return m_edges.size(); }
+    void insert(Edge* e)
+    {
+        const auto insertIt = std::lower_bound(m_edges.begin(), m_edges.end(), e,
+                                               [](const Edge* e1, const Edge* e2) { return vertexLessThan(*e1->second, *e2->second); });
+        m_edges.insert(insertIt, e);
+    }
+
+    Edge* next() { return m_edges.front(); }
+    void pop() { m_edges.erase(m_edges.begin()); }
+};
 
 class ActiveEdgeList
 {
@@ -104,13 +142,20 @@ class ActiveEdgeList
         return activeEdgeIndex;
     }
 
-    void removeLessThan(const Edge* e)
+    void removeLessThanEqual(const Edge* e)
     {
         m_edges.erase(std::remove_if(m_edges.begin(), m_edges.end(),
                                      [&](const Edge* e2) {
-                                         return e2->second->location.x() <= e->first->location.x() &&
-                                                e2->second->location.y() <= e->first->location.y();
+                                         return (e2->second->location.x() < e->first->location.x()) ||
+                                                (e2->second->location.x() <= e->first->location.x() &&
+                                                 e2->second->location.y() <= e->first->location.y());
                                      }),
+                      m_edges.end());
+    }
+
+    void removeLessThan(const geometry::Point2d& p)
+    {
+        m_edges.erase(std::remove_if(m_edges.begin(), m_edges.end(), [&](const Edge* e) { return (e->second->location.x() < p.x()); }),
                       m_edges.end());
     }
 
@@ -290,7 +335,7 @@ dcel::vertex_t* intersection(const geometry::ConstReferringSegment2d e1, const g
     bg::intersection(e1, e2, intersectionPoints);
 
     if (intersectionPoints.size() != 1)
-        throw std::invalid_argument("invalid polygon: #intersections != 1");
+        throw std::invalid_argument("invalid polygon: #intersections == " + std::to_string(intersectionPoints.size()));
 
     const auto intersectionVertex = dcelPoints.addOrGetVertex(intersectionPoints[0], dcel);
 
@@ -573,7 +618,7 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& poly)
     //  interior loop. Its presence in this list indicates that we
     //  need to create a vertical break at the second point on that
     //  edge at some point.
-    std::vector<Edge*> unfinishedEdges;
+    UnfinishedEdgeList unfinishedEdges;
 
     //! 3. Initialize the location of the last vertical to "not seen"
     //  This tracks where the last line that split out a new shape was
@@ -585,54 +630,54 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& poly)
     double lastVerticalXCoord = std::numeric_limits<double>::lowest();
 
     const auto completeUnfinishedEdges = [&](const double sweepLineXCoord) {
-        for (auto it = unfinishedEdges.begin(); it != unfinishedEdges.end(); it++)
+        // If the current edge's left-most point further right than the unfinished edge's right point, then
+        // we can process the unfinished edge and make a vertical up and down from it
+        while (unfinishedEdges.size() > 0 && unfinishedEdges.next()->second->location.x() < sweepLineXCoord)
         {
-            auto& unfinishedEdge = *it;
+            auto unfinishedEdge = unfinishedEdges.next();
 
-            // If the current edge's left-most point further right than the unfinished edge's right point, then
-            // we can process the unfinished edge and make a vertical up and down from it
-            if (unfinishedEdge->second->location.x() < sweepLineXCoord)
-            {
-                // Create new region to be the resulting one after closing the lower and upper regions
-                // for the hole
-                const auto& newDcelRegion = *dcel.regions.emplace(dcel.regions.end(), new dcel::region_t);
+            // Move the sweep line forward to remove any edges that end before the one we're
+            // finishing
+            activeEdges.removeLessThan(unfinishedEdge->second->location);
 
-                const auto activeEdgeIndex = activeEdges.indexOf(unfinishedEdge);
-                const bool isBottomEdge    = (activeEdgeIndex % 2) == 1;
+            // Create new region to be the resulting one after closing the lower and upper regions
+            // for the hole
+            const auto& newDcelRegion = *dcel.regions.emplace(dcel.regions.end(), new dcel::region_t);
 
-                assert(activeEdgeIndex > 0 && activeEdgeIndex < activeEdges.size());
+            const auto activeEdgeIndex = activeEdges.indexOf(unfinishedEdge);
+            const bool isBottomEdge    = (activeEdgeIndex % 2) == 1;
 
-                const auto upperEdgeIndex = isBottomEdge ? activeEdgeIndex + 1 : activeEdgeIndex;
-                const auto lowerEdgeIndex = isBottomEdge ? activeEdgeIndex : activeEdgeIndex - 1;
+            assert(activeEdgeIndex > 0 && activeEdgeIndex < activeEdges.size());
 
-                assert(upperEdgeIndex < activeEdges.size() - 1);
-                assert(lowerEdgeIndex > 0);
+            const auto upperEdgeIndex = isBottomEdge ? activeEdgeIndex + 1 : activeEdgeIndex;
+            const auto lowerEdgeIndex = isBottomEdge ? activeEdgeIndex : activeEdgeIndex - 1;
 
-                const auto upperEdge = activeEdges[upperEdgeIndex];
+            assert(upperEdgeIndex < activeEdges.size() - 1);
+            assert(lowerEdgeIndex > 0);
 
-                const auto upperDcelEdge = upperEdge->halfEdge;
+            const auto upperEdge = activeEdges[upperEdgeIndex];
 
-                const auto edgeBelow = activeEdges[lowerEdgeIndex - 1];
-                const auto edgeAbove = activeEdges[upperEdgeIndex + 1];
+            const auto upperDcelEdge = upperEdge->halfEdge;
 
-                auto downward = downwardEdge(upperDcelEdge, edgeBelow, verticalEdges, dcel, dcelPoints);
+            const auto edgeBelow = activeEdges[lowerEdgeIndex - 1];
+            const auto edgeAbove = activeEdges[upperEdgeIndex + 1];
 
-                upwardEdge(upperDcelEdge, edgeAbove, verticalEdges, dcel, dcelPoints);
+            auto downward = downwardEdge(upperDcelEdge, edgeBelow, verticalEdges, dcel, dcelPoints);
 
-                downward->twin->region = downward->twin->next->region = downward->twin->next->next->region = downward->twin->prev->region =
-                    newDcelRegion.get();
+            upwardEdge(upperDcelEdge, edgeAbove, verticalEdges, dcel, dcelPoints);
 
-                newDcelRegion->edge = downward->twin;
+            downward->twin->region = downward->twin->next->region = downward->twin->next->next->region = downward->twin->prev->region =
+                newDcelRegion.get();
 
-                // -1 because for loop increments again at end of this block, and the result
-                // of erase() should be the next thing processed
-                it = unfinishedEdges.erase(it) - 1;
-            }
+            newDcelRegion->edge = downward->twin;
+
+            unfinishedEdges.pop();
         }
     };
 
     //! 4. For each segment in the sorted input list
-    for (auto currentEdgeIt = edges.begin(); currentEdgeIt != edges.end(); currentEdgeIt++)
+    int i = 0;
+    for (auto currentEdgeIt = edges.begin(); currentEdgeIt != edges.end(); currentEdgeIt++, i++)
     {
         const auto& currentEdgePtr = *currentEdgeIt;
         auto& currentEdge          = *currentEdgePtr;
@@ -696,7 +741,7 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& poly)
         //      the second. However, since there are no intersections, it should
         //      be relatively ordered the same. Need to see how that works out
         //      with multiple edges ending at the same point.
-        activeEdges.removeLessThan(currentEdgePtr.get());
+        activeEdges.removeLessThanEqual(currentEdgePtr.get());
 
         // Add current edge to active list, tracking the index it was inserted at
         const auto currEdgeActiveIndex = activeEdges.insert(currentEdgePtr.get());
@@ -891,7 +936,7 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& poly)
 
             // Get the next and previous edges going around this inner loop
             // clockwise (it's flipped because inner loops are counter clockwise)
-            unfinishedEdges.push_back(currentEdgePtr.get());
+            unfinishedEdges.insert(currentEdgePtr.get());
         }
 
         //! h. Else if the current edge is the last edge to be processed on the exterior boundary
