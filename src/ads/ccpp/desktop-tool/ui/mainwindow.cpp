@@ -3,6 +3,7 @@
 
 #include "ads/ccpp/initial-cost/min-across-angles.hpp"
 #include "ads/ccpp/turn-cost/u-shaped.h"
+#include "ads/ccpp/polygon-decomposer/modified-trapezoidal.h"
 
 #include "ads/ccpp/desktop-tool/coordinate-transform.h"
 #include "ads/ccpp/dcel.h"
@@ -36,6 +37,7 @@ namespace bu = boost::units;
 QGraphicsItem* createItem(const ccpp::geometry::Polygon2d& poly);
 QGraphicsItem* createItem(const ccpp::geometry::Ring2d& ring);
 QGraphicsItem* createArrow(const ccpp::geometry::Point2d& origin, const double& length, const quantity::Radians& angle);
+QGraphicsItem* createRegions(const ccpp::DoublyConnectedEdgeList& dcel);
 //QGraphicsItem* createSweepPath(const std::vector<const dcel::const_half_edge_t*> edges);
 
 QPointF makePoint(const ccpp::geometry::Point2d& pt)
@@ -57,6 +59,9 @@ MainWindow::MainWindow(const QVector<std::shared_ptr<ImportShapeInterfaceFactory
     connect(m_ui->checkBox_initialDir, &QCheckBox::clicked, this, &MainWindow::updateView);
     connect(m_ui->checkBox_sweepOrder, &QCheckBox::clicked, this, &MainWindow::updateView);
     connect(m_ui->checkBox_rotate, &QCheckBox::clicked, this, &MainWindow::updateView);
+    connect(m_ui->checkBox_decomposition, &QCheckBox::clicked, this, &MainWindow::updateView);
+
+    m_defaultFilePath = "/home/ipiano/Documents/Code/MastersProject/test-files";
 
     for (const auto& importer : shapeImporters)
     {
@@ -129,6 +134,7 @@ void MainWindow::updateView()
     m_rawShape->setVisible(m_ui->checkBox_rawShape->checkState() == Qt::CheckState::Checked);
     m_initialDirArrow->setVisible(m_ui->checkBox_initialDir->checkState() == Qt::CheckState::Checked);
     //m_sweepPath->setVisible(m_ui->checkBox_sweepOrder->checkState() == Qt::CheckState::Checked);
+    m_decomposition->setVisible(m_ui->checkBox_decomposition->checkState() == Qt::CheckState::Checked);
 
     // Always flip scene upside down so +y is up
     QTransform transform(1, 0, 0, 0, -1, 0, 0, 0, 1);
@@ -172,6 +178,9 @@ void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::radian>& shape)
     const auto initialResult = initialCost.calculateInitialDirection(shapeXY);
     m_sweepDir               = initialResult;
 
+    ccpp::polygon_decomposer::ModifiedTrapezoidal decomposer(0);
+    const auto dcel = decomposer.decomposePolygon(shapeXY);
+
     const auto rect   = m_rawShape->boundingRect();
     const auto diag   = std::sqrt(rect.width() * rect.width() + rect.height() * rect.height());
     m_initialDirArrow = createArrow(bg::make_zero<ccpp::geometry::Point2d>(), 0.25 * diag, initialResult);
@@ -181,6 +190,9 @@ void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::radian>& shape)
     ccpp::sortEdges(edges, initialResult);
     m_sweepPath = createSweepPath(edges);*/
 
+    m_decomposition = createRegions(dcel);
+
+    m_scene->addItem(m_decomposition);
     m_scene->addItem(m_rawShape);
     m_scene->addItem(m_initialDirArrow);
     //m_scene->addItem(m_sweepPath);
@@ -223,7 +235,7 @@ QGraphicsItem* createArrow(const ccpp::geometry::Point2d& origin, const double& 
     const QPointF qTip(bg::get<0>(tip), bg::get<1>(tip));
     path.lineTo(qTip);
 
-    const auto offset = static_cast<quantity::Radians>(5 * bu::degree::degree);
+    const auto offset = static_cast<quantity::Radians>(10 * bu::degree::degree);
 
     ccpp::geometry::Point2d left =
         bg::make<ccpp::geometry::Point2d>(std::cos((angle + offset).value()), std::sin((angle + offset).value()));
@@ -241,9 +253,40 @@ QGraphicsItem* createArrow(const ccpp::geometry::Point2d& origin, const double& 
     path.lineTo({bg::get<0>(right), bg::get<1>(right)});
 
     auto pathItem = new QGraphicsPathItem(path);
-    pathItem->setPen(QPen(QBrush(QColor()), 5));
+    pathItem->setPen(QPen(QBrush(QColor(0, 0, 0, 62)), 5));
 
     return pathItem;
+}
+
+QGraphicsItem* createRegion(const ccpp::dcel::region_t& region)
+{
+    QPolygonF poly;
+
+    const auto firstEdge = region.edge;
+    auto currEdge        = firstEdge;
+    do
+    {
+        poly.push_back({currEdge->origin->location.x(), currEdge->origin->location.y()});
+    } while ((currEdge = currEdge->next) != firstEdge);
+
+    QGraphicsPolygonItem* polyItem = new QGraphicsPolygonItem(poly);
+    polyItem->setPen(QPen(QBrush(QColor("black")), 2));
+    polyItem->setBrush(QBrush(QColor(0, 0, 0, 125)));
+    polyItem->setVisible(true);
+
+    return polyItem;
+}
+
+QGraphicsItem* createRegions(const ccpp::DoublyConnectedEdgeList& dcel)
+{
+    QGraphicsItemGroup* items = new QGraphicsItemGroup;
+
+    for (const auto& region : dcel.regions)
+    {
+        items->addToGroup(createRegion(*region));
+    }
+
+    return items;
 }
 
 /*QGraphicsItem* createSweepPath(const std::vector<const dcel::const_half_edge_t*> edges)
