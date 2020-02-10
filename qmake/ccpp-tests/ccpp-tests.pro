@@ -14,6 +14,5 @@ TEST_ROOT=$$PROJECT_ROOT/gtests
 # the POSIX interface
 LIBS += -lboost_regex
 
-SOURCES += \
-    $$TEST_ROOT/init-test.cpp \
-    $$TEST_ROOT/uturn-test.cpp
+SOURCES += $$files($$TEST_ROOT/*test.cpp, true)
+
