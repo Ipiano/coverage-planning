@@ -22,6 +22,9 @@
 #include <boost/units/systems/si.hpp>
 #include <boost/units/systems/angle/degrees.hpp>
 
+#include <random>
+#include <chrono>
+
 namespace ads
 {
 namespace ccpp
@@ -178,7 +181,7 @@ void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::radian>& shape)
     const auto initialResult = initialCost.calculateInitialDirection(shapeXY);
     m_sweepDir               = initialResult;
 
-    ccpp::polygon_decomposer::ModifiedTrapezoidal decomposer(0);
+    ccpp::polygon_decomposer::ModifiedTrapezoidal decomposer(m_sweepDir);
     const auto dcel = decomposer.decomposePolygon(shapeXY);
 
     const auto rect   = m_rawShape->boundingRect();
@@ -220,7 +223,7 @@ QGraphicsItem* createItem(const ccpp::geometry::Ring2d& ring)
                    [](const ccpp::geometry::Point2d& pt) { return QPointF(bg::get<0>(pt), bg::get<1>(pt)); });
 
     QGraphicsPolygonItem* ringGraphic = new QGraphicsPolygonItem(qRing);
-    ringGraphic->setPen(QPen(QBrush(QColor()), 5));
+    ringGraphic->setPen(QPen(QBrush(QColor(0, 0, 0, 62)), 5));
     return ringGraphic;
 }
 
@@ -253,9 +256,17 @@ QGraphicsItem* createArrow(const ccpp::geometry::Point2d& origin, const double& 
     path.lineTo({bg::get<0>(right), bg::get<1>(right)});
 
     auto pathItem = new QGraphicsPathItem(path);
-    pathItem->setPen(QPen(QBrush(QColor(0, 0, 0, 62)), 5));
+    pathItem->setPen(QPen(QBrush(QColor("black")), 3));
 
     return pathItem;
+}
+
+QColor randomColor()
+{
+    std::uniform_int_distribution<uint8_t> rgbDist(125, 255);
+    static std::mt19937_64 reng(std::chrono::system_clock::now().time_since_epoch().count());
+
+    return QColor(rgbDist(reng), rgbDist(reng), rgbDist(reng));
 }
 
 QGraphicsItem* createRegion(const ccpp::dcel::region_t& region)
@@ -269,9 +280,12 @@ QGraphicsItem* createRegion(const ccpp::dcel::region_t& region)
         poly.push_back({currEdge->origin->location.x(), currEdge->origin->location.y()});
     } while ((currEdge = currEdge->next) != firstEdge);
 
+    auto fill = randomColor();
+    fill.setAlpha(125);
+
     QGraphicsPolygonItem* polyItem = new QGraphicsPolygonItem(poly);
     polyItem->setPen(QPen(QBrush(QColor("black")), 2));
-    polyItem->setBrush(QBrush(QColor(0, 0, 0, 125)));
+    polyItem->setBrush(QBrush(fill));
     polyItem->setVisible(true);
 
     return polyItem;
