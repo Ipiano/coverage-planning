@@ -159,6 +159,13 @@ class ActiveEdgeList
                       m_edges.end());
     }
 
+    void removeSpecific(const Edge* e)
+    {
+        const auto targetIt = std::find(m_edges.begin(), m_edges.end(), e);
+        if (targetIt != m_edges.end())
+            m_edges.erase(targetIt);
+    }
+
     size_t indexOf(const Edge* e)
     {
         const auto edgeIt = std::lower_bound(m_edges.begin(), m_edges.end(), e, &activeEdgeLessThan);
@@ -562,8 +569,14 @@ dcel::half_edge_t* upwardEdge(dcel::half_edge_t* edgeFromPointBelow, Edge* edgeA
  * Current limitations of implementation:
  * * Cannot handle a polygon which does not satisfy boost::geometry::is_valid()
  */
-DoublyConnectedEdgeList decompose(const geometry::Polygon2d& poly)
+DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
 {
+    geometry::Polygon2d poly;
+
+    // Simplify the polygon with a very small tolerance
+    // to remove colinear edges
+    bg::simplify(originalPoly, poly, 0.000001);
+
     if (!bg::is_valid(poly))
         throw std::invalid_argument("boost::geometry::is_valid() failed");
 
@@ -646,6 +659,7 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& poly)
 
             const auto activeEdgeIndex = activeEdges.indexOf(unfinishedEdge);
             const bool isBottomEdge    = (activeEdgeIndex % 2) == 1;
+            const bool isVertical      = std::abs(unfinishedEdge->first->location.x() - unfinishedEdge->second->location.x()) < 0.00001;
 
             assert(activeEdgeIndex > 0 && activeEdgeIndex < activeEdges.size());
 
@@ -655,19 +669,30 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& poly)
             assert(upperEdgeIndex < activeEdges.size() - 1);
             assert(lowerEdgeIndex > 0);
 
+            const auto lowerEdge = activeEdges[lowerEdgeIndex];
             const auto upperEdge = activeEdges[upperEdgeIndex];
 
+            const auto lowerDcelEdge = lowerEdge->halfEdge;
             const auto upperDcelEdge = upperEdge->halfEdge;
 
             const auto edgeBelow = activeEdges[lowerEdgeIndex - 1];
             const auto edgeAbove = activeEdges[upperEdgeIndex + 1];
 
-            auto downward = downwardEdge(upperDcelEdge, edgeBelow, verticalEdges, dcel, dcelPoints);
+            dcel::half_edge_t* downward;
+            if (isVertical)
+            {
+                lowerDcelEdge->region = newDcelRegion.get();
+                downward              = downwardEdge(lowerDcelEdge, edgeBelow, verticalEdges, dcel, dcelPoints);
+            }
+            else
+            {
+                downward = downwardEdge(upperDcelEdge, edgeBelow, verticalEdges, dcel, dcelPoints);
+            }
 
-            upwardEdge(upperDcelEdge, edgeAbove, verticalEdges, dcel, dcelPoints);
+            auto upward = upwardEdge(upperDcelEdge, edgeAbove, verticalEdges, dcel, dcelPoints);
 
-            downward->twin->region = downward->twin->next->region = downward->twin->next->next->region = downward->twin->prev->region =
-                newDcelRegion.get();
+            upward->region = upward->next->region = upward->prev->region = newDcelRegion.get();
+            downward->twin->region = downward->twin->next->region = downward->twin->prev->region = newDcelRegion.get();
 
             newDcelRegion->edge = downward->twin;
 
@@ -848,13 +873,21 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& poly)
             //  Correction: "second edge of the interior loop"
 
             // Use previous becuase inner loops are counterclockwise
-            const auto& nextEdgePtr = currentEdge.previous;
+            // If the previous is a vertical segment, go back one more
+            // Since we simplified to remove colinear edges, we know that
+            // there's no other cases
+            const bool firstEdgeIsVertical =
+                std::abs(currentEdge.previous->first->location.x() - currentEdge.previous->second->location.x()) < 0.00001;
+            const auto nextEdgePtr = firstEdgeIsVertical ? currentEdge.previous->previous : currentEdge.previous;
 
             //! ii. Mark the second edge as processed
             //
             //  Wasn't explicitly listed in part 'e' above, but I added it
             //  there because it's here and that makes sense
             processedSegments.insert(nextEdgePtr);
+
+            if (firstEdgeIsVertical)
+                processedSegments.insert(currentEdge.previous);
 
             //! iii. Update the active edge list
             //  Ah yes, let me just do an 'update'
@@ -909,8 +942,18 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& poly)
             downward->twin->region = downward->twin->next->region = downward->twin->prev->region = lowerDcelRegion.get();
             lowerDcelRegion->edge                                                                = downward->twin;
 
-            auto upward = upwardEdge(downward, edgeAbove, verticalEdges, dcel, dcelPoints);
+            dcel::half_edge_t* upward;
+            if (firstEdgeIsVertical)
+            {
+                downward->prev->region = downward->region;
+                upward                 = upwardEdge(downward->prev, edgeAbove, verticalEdges, dcel, dcelPoints);
+            }
+            else
+            {
+                upward = upwardEdge(downward, edgeAbove, verticalEdges, dcel, dcelPoints);
+            }
 
+            upward->twin->next->region = downward->region;
             upward->region = upward->next->region = upward->prev->region = upperDcelRegion.get();
             upperDcelRegion->edge                                        = upward;
         }
@@ -954,10 +997,7 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& poly)
             //! ii. Connect up the edge to the previous or next edge on the boundary, as appropriate, so as to close
             //! the exterior boundary
 
-            assert(currentEdgeIt + 1 == edges.end());
-
-            // Complete any unfinished edges created in the last step
-            completeUnfinishedEdges(currentEdge.second->location.x() + 1);
+            // TODO : Figure out what's actually supposed to happen here
         }
 
         //! i. Else
@@ -983,6 +1023,9 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& poly)
             // TODO: Cut regions based on width
         }
     };
+
+    // Complete any unfinished edges created in the last step
+    completeUnfinishedEdges(edges.back()->second->location.x() + 1);
 
     // Remove any unused regions in the dcel; this is rare, but can happen
     std::unordered_set<const dcel::region_t*> unusedRegions;
