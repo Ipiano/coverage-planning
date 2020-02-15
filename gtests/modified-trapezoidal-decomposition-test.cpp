@@ -1,6 +1,8 @@
 #include "ads/ccpp/polygon-decomposer/modified-trapezoidal.h"
 
 #include <boost/geometry/algorithms/distance.hpp>
+#include <boost/geometry/multi/geometries/multi_point.hpp>
+#include <boost/geometry/algorithms/intersection.hpp>
 
 #include <gtest/gtest.h>
 
@@ -224,28 +226,238 @@ TEST_P(ModifiedTrapezoidalPolygonDecomposition, ProducesCorrectDcel)
     EXPECT_TRUE(DcelMatchesDescription(dcel, GetParam().second));
 }
 
-INSTANTIATE_TEST_SUITE_P(CCPPTests, ModifiedTrapezoidalPolygonDecomposition,
-                         Values(
+// Basic Shapes; defined such that
+//      The left-bottom-most point is index 0
+//      The right-top-most point is index n/2
+const geometry::Ring2d SQUARE             = {{0, 0}, {0, 1}, {1, 1}, {1, 0}};
+const geometry::Ring2d DIAMOND            = {{0, 0}, {1, 1}, {2, 0}, {1, -1}};
+const geometry::Ring2d HEXAGON_HORIZONTAL = {{0, 0}, {1, 1}, {2, 1}, {3, 0}, {2, -1}, {1, -1}};
+const geometry::Ring2d HEXAGON_VERTICAL   = {{-1, 1}, {-1, 2}, {0, 3}, {1, 2}, {1, 1}, {0, 0}};
+const geometry::Ring2d OCTOGON            = {{0, 0}, {0, 1}, {1, 2}, {2, 2}, {3, 1}, {3, 0}, {2, -1}, {1, -1}};
+const geometry::Ring2d DODECAHEDRON = {{0, 0}, {1, 2}, {2, 3}, {4, 4}, {6, 3}, {7, 2}, {8, 0}, {7, -2}, {6, -3}, {4, -4}, {2, -3}, {1, -2}};
 
-                             // A diamond with 4 points
-                             PolygonAndDcel({{{0, 0}, {1, 1}, {2, 0}, {1, -1}}}, {{{{0, 0}, {1, 1}, {2, 0}, {1, -1}}}}),
+// Basic tests:
+//      Tests basic shapes as exterior and internal holes. Shapes are
+//      chosen to get a mix of vertical edges and non-vertical edges at varying locations relative
+//      to the leftmost side of rings
+//
+//      Trapezoids are referred to as 'horizontal' and 'vertical' based on the two parallel
+//      edges that face one of those ways
+//
+//      Colinear edges are expected to be combined into a single edge in the result
+//      when possible
 
-                             // A diamond with extra colinear points splitting each edge
-                             PolygonAndDcel({{{0, 0}, {1, 1}, {2, 2}, {3, 1}, {4, 0}, {3, -1}, {2, -2}, {1, -1}}},
-                                            {{{{0, 0}, {1, 1}, {2, 2}, {3, 1}, {4, 0}, {3, -1}, {2, -2}, {1, -1}}}}),
+geometry::Ring2d addColinearities(const geometry::Ring2d& ring)
+{
+    return ring;
+}
 
-                             // A square with 4 points
-                             PolygonAndDcel({{{0, 0}, {0, 1}, {1, 1}, {1, 0}}}, {{{{0, 0}, {0, 1}, {1, 1}, {1, 0}}}}),
+geometry::Ring2d centerOnOrigin(const geometry::Ring2d& ring)
+{
+    geometry::Point2d centroid(0, 0);
 
-                             // A square with extra colinear points splitting each edge
-                             PolygonAndDcel({{{0, 0}, {0, 1}, {0, 2}, {1, 2}, {2, 2}, {2, 1}, {2, 0}, {1, 0}}},
-                                            {{{{0, 0}, {0, 1}, {0, 2}, {1, 2}, {2, 2}, {2, 1}, {2, 0}, {1, 0}}}}),
+    for (auto it = ring.begin(); it != ring.end() - 1; it++)
+        bg::add_point(centroid, *it);
+    bg::divide_value(centroid, ring.size() - 1);
 
-                             // A square with a diamond hole in the middle
-                             PolygonAndDcel({{{0, 0}, {0, 3}, {3, 3}, {3, 0}}, {{{1, 1.5}, {1.5, 1}, {2, 1.5}, {1.5, 2}}}},
-                                            {{{{0, 0}, {0, 3}, {1, 3}, {1, 1.5}, {1, 0}},
-                                              {{1, 1.5}, {1, 3}, {2, 3}, {2, 1.5}, {1.5, 2}},
-                                              {{1, 1.5}, {1.5, 1}, {2, 1.5}, {2, 0}, {1, 0}},
-                                              {{2, 1.5}, {2, 3}, {3, 3}, {3, 0}, {2, 0}}}})
+    const bg::strategy::transform::translate_transformer<double, 2, 2> center(-centroid.x(), -centroid.y());
 
-                                 ));
+    geometry::Ring2d centered;
+    bg::transform(ring, centered, center);
+
+    return centered;
+}
+
+bg::model::multi_point<geometry::Point2d> intersection(const geometry::Segment2d& segment, const geometry::Ring2d& ring)
+{
+    bg::model::multi_point<geometry::Point2d> result;
+
+    bg::for_each_segment(ring, [&](const geometry::ConstReferringSegment2d& ringSegment) {
+        bg::model::multi_point<geometry::Point2d> tmp;
+        bg::intersection(segment, ringSegment, tmp);
+        result.insert(result.end(), tmp.begin(), tmp.end());
+    });
+
+    std::sort(result.begin(), result.end(), [](const geometry::Point2d& l, const geometry::Point2d& r) {
+        if (std::abs(l.x() - r.x()) < 0.0001)
+            return l.y() < r.y();
+        return l.x() < r.x();
+    });
+
+    result.erase(std::unique(result.begin(), result.end(),
+                             [](const geometry::Point2d& p1, const geometry::Point2d& p2) { return bg::distance(p1, p2) < 0.0001; }),
+                 result.end());
+
+    return result;
+}
+
+const std::pair<geometry::Point2d, geometry::Point2d> verticalIntersectionsAt(const geometry::Point2d& target, const geometry::Ring2d& loop)
+{
+    const geometry::Segment2d verticalLine{{target.x(), 100}, {target.x(), -100}};
+
+    auto intersections = intersection(verticalLine, loop);
+
+    if (intersections.size() != 2u)
+        throw std::runtime_error("didn't get 2 intersections");
+
+    std::pair<geometry::Point2d, geometry::Point2d> result(intersections[0], intersections[1]);
+
+    if (result.first.y() < result.second.y())
+        std::swap(result.first, result.second);
+    return result;
+}
+
+const PolygonAndDcel singleHoleCase(const geometry::Ring2d& outer, const geometry::Ring2d& inner, bool outerColinearities,
+                                    bool innerColinearities)
+{
+    PolygonAndDcel result;
+
+    // Scale up outer shape so inner shape fits inside
+    bg::strategy::transform::scale_transformer<double, 2, 2> scaleUp(10);
+    geometry::Ring2d scaledOuter;
+    bg::transform(outer, scaledOuter, scaleUp);
+
+    const auto transformedOuter = centerOnOrigin(scaledOuter);
+    const auto transformedInner = centerOnOrigin(inner);
+
+    result.first = {outerColinearities ? addColinearities(transformedOuter) : transformedOuter,
+                    {innerColinearities ? addColinearities(transformedInner) : transformedInner}};
+
+    const auto holeStartIntersections = verticalIntersectionsAt(transformedInner[0], transformedOuter);
+    const auto holeEndIntersections   = verticalIntersectionsAt(transformedInner[transformedInner.size() / 2], transformedOuter);
+
+    const double innerLeft  = transformedInner[0].x();
+    const double innerRight = transformedInner[transformedInner.size() / 2].x();
+
+    // Split the inner loop into 4 pieces; left, right, top, bottom
+    typedef bg::ever_circling_iterator<geometry::Ring2d::const_reverse_iterator> circle_it_type;
+    circle_it_type left(transformedInner.rbegin(), transformedInner.rend()), right = left, top = left, bottom = left;
+
+    while (left->x() < innerRight)
+        left++;
+    right = left;
+    while (std::abs(left->x() - innerRight) < 0.001)
+        left++;
+    top = std::prev(left);
+    while (left->x() > innerLeft)
+        left++;
+
+    // Build the 4 regions that will result from decomposing the shape
+    auto& regions = result.second.regions;
+    regions.resize(4);
+
+    bg::ever_circling_iterator<geometry::Ring2d::const_iterator> outerIt(transformedOuter.begin(), transformedOuter.end());
+    auto outerStart = outerIt;
+
+    // Start first region
+    while (outerIt->x() < innerLeft)
+        regions[0].push_back(*outerIt++);
+    regions[0].push_back(holeStartIntersections.first);
+    auto leftIt = left;
+    do
+    {
+        regions[0].push_back(*leftIt);
+    } while (leftIt++ != bottom);
+    regions[0].pop_back();
+
+    // Do top region
+    regions[1].push_back(holeStartIntersections.first);
+    while (outerIt->x() < innerRight)
+        regions[1].push_back(*outerIt++);
+    regions[1].push_back(holeEndIntersections.first);
+    auto topIt = top;
+    do
+    {
+        regions[1].push_back(*topIt);
+    } while (topIt++ != left);
+
+    // Do right region
+    regions[3].push_back(holeEndIntersections.first);
+    regions[3].push_back(*outerIt++);
+    while (outerIt->x() > innerRight)
+        regions[3].push_back(*outerIt++);
+    regions[3].push_back(holeEndIntersections.second);
+    auto rightIt = right;
+    do
+    {
+        regions[3].push_back(*rightIt);
+    } while (rightIt++ != top);
+
+    // Do bottom region
+    regions[2].push_back(holeEndIntersections.second);
+    while (outerIt->x() > innerLeft)
+        regions[2].push_back(*outerIt++);
+    regions[2].push_back(holeStartIntersections.second);
+    auto bottomIt = bottom;
+    do
+    {
+        regions[2].push_back(*bottomIt);
+    } while (bottomIt++ != right);
+
+    // Finish left region
+    regions[0].push_back(holeStartIntersections.second);
+    while (outerIt != outerStart)
+        regions[0].push_back(*outerIt++);
+
+    regions[0].pop_back();
+    return result;
+}
+
+const PolygonAndDcel exteriorLoopCase(const geometry::Ring2d& outer)
+{
+    PolygonAndDcel result;
+    result.first = {outer};
+
+    result.second.regions.emplace_back();
+    for (const auto& pt : outer)
+        result.second.regions[0].push_back(pt);
+    result.second.regions[0].pop_back();
+    return result;
+}
+
+const std::vector<PolygonAndDcel> permuteCompositions(const std::vector<geometry::Ring2d>& shapes)
+{
+    std::vector<PolygonAndDcel> cases;
+
+    // Add index just for debugging crashes
+    int i = 0;
+    for (auto outer : shapes)
+    {
+        bg::correct(outer);
+        int j = 0;
+        for (auto inner : shapes)
+        {
+            bg::correct(inner);
+
+            cases.push_back(exteriorLoopCase(outer));
+            cases.push_back(exteriorLoopCase(addColinearities(outer)));
+            cases.push_back(singleHoleCase(outer, inner, false, false));
+            cases.push_back(singleHoleCase(outer, inner, true, false));
+            cases.push_back(singleHoleCase(outer, inner, false, true));
+            cases.push_back(singleHoleCase(outer, inner, true, true));
+            j++;
+        }
+        i++;
+    }
+
+    return cases;
+}
+
+INSTANTIATE_TEST_SUITE_P(CCPPTests_Basic, ModifiedTrapezoidalPolygonDecomposition,
+                         ValuesIn(permuteCompositions({SQUARE, DIAMOND, HEXAGON_VERTICAL, HEXAGON_HORIZONTAL, OCTOGON, DODECAHEDRON})));
+
+// Tests
+
+std::vector<PolygonAndDcel> singleDiamondHolePermuations()
+{
+    return {};
+}
+
+INSTANTIATE_TEST_SUITE_P(CCPPTests_SingleDiamondHole, ModifiedTrapezoidalPolygonDecomposition, ValuesIn(singleDiamondHolePermuations()));
+
+std::vector<PolygonAndDcel> singleSquareHolePermuations()
+{
+    return {};
+}
+
+INSTANTIATE_TEST_SUITE_P(CCPPTests_SingleSquareHole, ModifiedTrapezoidalPolygonDecomposition, ValuesIn(singleSquareHolePermuations()));
