@@ -14,6 +14,7 @@ using namespace testing;
 using namespace ads::ccpp;
 namespace bg = boost::geometry;
 
+// Utility functions
 std::string to_string(const geometry::Point2d& pt)
 {
     std::stringstream ss;
@@ -31,6 +32,9 @@ struct DcelDescription
     std::vector<std::vector<geometry::Point2d>> regions;
 };
 
+// GTest checker that a DCEL object is valid. Meaning it does not
+// reference pointers outside itself, and it does not do anything
+// logically incorrect (e.g., adjacent edges don't have same region)
 AssertionResult DcelIsValid(const DoublyConnectedEdgeList& dcel)
 {
     std::unordered_set<const dcel::region_t*> regionSet;
@@ -134,7 +138,12 @@ AssertionResult DcelIsValid(const DoublyConnectedEdgeList& dcel)
     return AssertionSuccess();
 }
 
-// TODO: MAke this work regardless of region ordering
+// GTest checker that a DCEL has a specific structure, meaning
+// that it has the expected regions and that each region has the expected
+// set of points in the correct order
+//
+// TODO: Currently the regions must be in the same order in both pieces; that should
+// not be necessary
 AssertionResult DcelMatchesDescription(const DoublyConnectedEdgeList& dcel, const DcelDescription& description)
 {
     if (dcel.regions.size() != description.regions.size())
@@ -219,11 +228,34 @@ class ModifiedTrapezoidalPolygonDecomposition : public testing::TestWithParam<Po
     }
 };
 
+// Core test of this file; given a boost polygon and an expected
+// DCEL description, decompose the polygon, check that the produced
+// DCEL is valid, and then check that it matches the description
 TEST_P(ModifiedTrapezoidalPolygonDecomposition, ProducesCorrectDcel)
 {
     const auto dcel = decomposer.decomposePolygon(poly);
     ASSERT_TRUE(DcelIsValid(dcel));
     EXPECT_TRUE(DcelMatchesDescription(dcel, GetParam().second));
+}
+
+/////////////////////////////////////////////////////////////////////
+// Everything below this is generating test cases
+/////////////////////////////////////////////////////////////////////
+
+geometry::Ring2d centerOnOrigin(const geometry::Ring2d& ring)
+{
+    geometry::Point2d centroid(0, 0);
+
+    for (auto it = ring.begin(); it != ring.end() - 1; it++)
+        bg::add_point(centroid, *it);
+    bg::divide_value(centroid, ring.size() - 1);
+
+    const bg::strategy::transform::translate_transformer<double, 2, 2> center(-centroid.x(), -centroid.y());
+
+    geometry::Ring2d centered;
+    bg::transform(ring, centered, center);
+
+    return centered;
 }
 
 // Basic Shapes; defined such that
@@ -241,31 +273,24 @@ const geometry::Ring2d DODECAHEDRON = {{0, 0}, {1, 2}, {2, 3}, {4, 4}, {6, 3}, {
 //      chosen to get a mix of vertical edges and non-vertical edges at varying locations relative
 //      to the leftmost side of rings
 //
-//      Trapezoids are referred to as 'horizontal' and 'vertical' based on the two parallel
-//      edges that face one of those ways
-//
-//      Colinear edges are expected to be combined into a single edge in the result
-//      when possible
+//      Colinear, adjacent edges from the input are expected to be treated as if
+//      they are a single edge in the input
 
 geometry::Ring2d addColinearities(const geometry::Ring2d& ring)
 {
+    geometry::Ring2d newRing;
+
+    bg::for_each_segment(ring, [&](const geometry::ConstReferringSegment2d& s) {
+        newRing.push_back(s.first);
+
+        auto midpoint = s.first;
+        bg::add_point(midpoint, s.second);
+        bg::divide_value(midpoint, 2.0);
+
+        newRing.push_back(midpoint);
+    });
+
     return ring;
-}
-
-geometry::Ring2d centerOnOrigin(const geometry::Ring2d& ring)
-{
-    geometry::Point2d centroid(0, 0);
-
-    for (auto it = ring.begin(); it != ring.end() - 1; it++)
-        bg::add_point(centroid, *it);
-    bg::divide_value(centroid, ring.size() - 1);
-
-    const bg::strategy::transform::translate_transformer<double, 2, 2> center(-centroid.x(), -centroid.y());
-
-    geometry::Ring2d centered;
-    bg::transform(ring, centered, center);
-
-    return centered;
 }
 
 bg::model::multi_point<geometry::Point2d> intersection(const geometry::Segment2d& segment, const geometry::Ring2d& ring)
@@ -446,7 +471,7 @@ const std::vector<PolygonAndDcel> permuteCompositions(const std::vector<geometry
 INSTANTIATE_TEST_SUITE_P(CCPPTests_Basic, ModifiedTrapezoidalPolygonDecomposition,
                          ValuesIn(permuteCompositions({SQUARE, DIAMOND, HEXAGON_VERTICAL, HEXAGON_HORIZONTAL, OCTOGON, DODECAHEDRON})));
 
-// Tests
+// Tests for a single hole where the points are at various locations relative to the points on the exterior
 
 std::vector<PolygonAndDcel> singleDiamondHolePermuations()
 {
@@ -455,9 +480,4 @@ std::vector<PolygonAndDcel> singleDiamondHolePermuations()
 
 INSTANTIATE_TEST_SUITE_P(CCPPTests_SingleDiamondHole, ModifiedTrapezoidalPolygonDecomposition, ValuesIn(singleDiamondHolePermuations()));
 
-std::vector<PolygonAndDcel> singleSquareHolePermuations()
-{
-    return {};
-}
-
-INSTANTIATE_TEST_SUITE_P(CCPPTests_SingleSquareHole, ModifiedTrapezoidalPolygonDecomposition, ValuesIn(singleSquareHolePermuations()));
+// Tests for when there are weird concavities in the shapes
