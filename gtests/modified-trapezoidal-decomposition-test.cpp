@@ -315,10 +315,11 @@ bg::model::multi_point<geometry::Point2d> intersection(const geometry::Segment2d
 
     return result;
 }
+// Tests for a single hole where the points are at various locations relative to the points on the exterior
 
 const std::pair<geometry::Point2d, geometry::Point2d> verticalIntersectionsAt(const geometry::Point2d& target, const geometry::Ring2d& loop)
 {
-    const geometry::Segment2d verticalLine{{target.x(), 100}, {target.x(), -100}};
+    const geometry::Segment2d verticalLine {{target.x(), 100}, {target.x(), -100}};
 
     auto intersections = intersection(verticalLine, loop);
 
@@ -468,16 +469,45 @@ const std::vector<PolygonAndDcel> permuteCompositions(const std::vector<geometry
     return cases;
 }
 
-INSTANTIATE_TEST_SUITE_P(CCPPTests_Basic, ModifiedTrapezoidalPolygonDecomposition,
+INSTANTIATE_TEST_SUITE_P(DISABLED_CCPPTests_Basic, ModifiedTrapezoidalPolygonDecomposition,
                          ValuesIn(permuteCompositions({SQUARE, DIAMOND, HEXAGON_VERTICAL, HEXAGON_HORIZONTAL, OCTOGON, DODECAHEDRON})));
 
-// Tests for a single hole where the points are at various locations relative to the points on the exterior
-
-std::vector<PolygonAndDcel> singleDiamondHolePermuations()
-{
-    return {};
-}
-
-INSTANTIATE_TEST_SUITE_P(CCPPTests_SingleDiamondHole, ModifiedTrapezoidalPolygonDecomposition, ValuesIn(singleDiamondHolePermuations()));
-
 // Tests for when there are weird concavities in the shapes
+INSTANTIATE_TEST_SUITE_P(
+    CCPPTests_Concavities, ModifiedTrapezoidalPolygonDecomposition,
+    Values(
+
+        // One simple concavity on opening side of inner loop
+        PolygonAndDcel {{{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{2, 2}, {2, 4}, {3, 5}, {2, 6}, {2, 8}, {8, 8}, {8, 2}}}},
+                        {{{{0, 0}, {0, 10}, {2, 10}, {2, 8}, {2, 6}, {2, 4}, {2, 2}, {2, 0}},
+                          {{2, 0}, {2, 2}, {8, 2}, {8, 0}},
+                          {{2, 4}, {2, 6}, {3, 5}},
+                          {{2, 8}, {2, 10}, {8, 10}, {8, 8}},
+                          {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
+
+        // One simple concavity as the opening side of inner loop
+        PolygonAndDcel {{{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{2, 2}, {3, 5}, {2, 8}, {8, 8}, {8, 2}}}},
+                        {{{{0, 0}, {0, 10}, {2, 10}, {2, 8}, {2, 2}, {2, 0}},
+                          {{2, 0}, {2, 2}, {8, 2}, {8, 0}},
+                          {{2, 2}, {2, 8}, {3, 5}},
+                          {{2, 8}, {2, 10}, {8, 10}, {8, 8}},
+                          {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
+
+        // Two simple concavities on opening side of inner loop
+        PolygonAndDcel {
+            {{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{2, 2}, {2, 3}, {3, 3.5}, {2, 4}, {2, 6}, {3, 6.5}, {2, 7}, {2, 8}, {8, 8}, {8, 2}}}},
+            {{{{0, 0}, {0, 10}, {2, 10}, {2, 8}, {2, 7}, {2, 6}, {2, 4}, {2, 3}, {2, 2}, {2, 0}},
+              {{2, 0}, {2, 2}, {8, 2}, {8, 0}},
+              {{2, 3}, {2, 4}, {3, 3.5}},
+              {{2, 6}, {2, 7}, {3, 6.5}},
+              {{2, 8}, {2, 10}, {8, 10}, {8, 8}},
+              {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
+
+        // Two simple concavities as the opening side of inner loop
+        PolygonAndDcel {{{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{2, 2}, {3, 4}, {2, 5}, {3, 6}, {2, 8}, {8, 8}, {8, 2}}}},
+                        {{{{0, 0}, {0, 10}, {2, 10}, {2, 8}, {2, 5}, {2, 2}, {2, 0}},
+                          {{2, 0}, {2, 2}, {8, 2}, {8, 0}},
+                          {{2, 2}, {2, 5}, {3, 4}},
+                          {{2, 5}, {2, 8}, {3, 6}},
+                          {{2, 8}, {2, 10}, {8, 10}, {8, 8}},
+                          {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}}));

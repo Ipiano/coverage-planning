@@ -42,6 +42,11 @@ struct Edge
     dcel::half_edge_t* halfEdge = nullptr;
 };
 
+bool edgeIsVertical(const Edge* e)
+{
+    return std::abs(e->first->location.x() - e->second->location.x()) < 0.00001;
+}
+
 // < operator for verticies, sorts left->right, bottom->top
 bool vertexLessThan(const dcel::vertex_t& left, const dcel::vertex_t& right)
 {
@@ -78,7 +83,7 @@ struct angleLessThan
         return polygon_decomposer::unit(geometry::ConstReferringSegment2d(e->first->location, e->second->location));
     }
 
-    double valueOf(const Edge* e) const { return bg::dot_product(unit(e), geometry::Point2d{0, 1}); }
+    double valueOf(const Edge* e) const { return bg::dot_product(unit(e), geometry::Point2d {0, 1}); }
 };
 
 bool edgeLessThan(const std::unique_ptr<Edge>& left, const std::unique_ptr<Edge>& right)
@@ -96,7 +101,7 @@ bool activeEdgeLessThan(const Edge* l, const Edge* r)
 {
     // Make unit vectors out of the edges; and check dot products
     const auto unitL1L2   = unit(geometry::ConstReferringSegment2d(l->first->location, l->second->location));
-    const auto normalL1L2 = geometry::Point2d{-unitL1L2.y(), unitL1L2.x()};
+    const auto normalL1L2 = geometry::Point2d {-unitL1L2.y(), unitL1L2.x()};
     const auto unitL1R1   = unit(geometry::ConstReferringSegment2d(l->first->location, r->first->location));
     const auto unitL1R2   = unit(geometry::ConstReferringSegment2d(l->first->location, r->second->location));
 
@@ -137,7 +142,10 @@ class ActiveEdgeList
     {
         const auto currEdgeInsertIt = std::lower_bound(m_edges.begin(), m_edges.end(), e, &activeEdgeLessThan);
         const auto activeEdgeIndex  = static_cast<unsigned long>(std::distance(m_edges.begin(), currEdgeInsertIt));
-        m_edges.insert(currEdgeInsertIt, e);
+
+        // Prevent double insertions
+        if (currEdgeInsertIt == m_edges.end() || *currEdgeInsertIt != e)
+            m_edges.insert(currEdgeInsertIt, e);
 
         return activeEdgeIndex;
     }
@@ -701,8 +709,10 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
     };
 
     //! 4. For each segment in the sorted input list
-    int i = 0;
-    for (auto currentEdgeIt = edges.begin(); currentEdgeIt != edges.end(); currentEdgeIt++, i++)
+    int i              = 0;
+    auto currentEdgeIt = edges.begin();
+    auto sweepLineIt   = edges.begin();
+    for (; currentEdgeIt != edges.end(); currentEdgeIt++, i++)
     {
         const auto& currentEdgePtr = *currentEdgeIt;
         auto& currentEdge          = *currentEdgePtr;
@@ -769,7 +779,29 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
         activeEdges.removeLessThanEqual(currentEdgePtr.get());
 
         // Add current edge to active list, tracking the index it was inserted at
+        // Active edge list prevents double insertion, so we can always do this
+        // and if it was already inserted we'll just get back the index
         const auto currEdgeActiveIndex = activeEdges.insert(currentEdgePtr.get());
+
+        if (sweepLineIt == currentEdgeIt)
+        {
+            // Add all other edges that start at the current sweep line location to the
+            // active edge list; this is important so that if we need to make a vertical line
+            // segment to break the shape here, it doesn't go all the way up to the outer boundary
+            // because we haven't processed the line directly above the current one
+            sweepLineIt++;
+
+            // TODO: Track this iterator over time so it doesn't be an N^2 kind of deal in
+            // stupid cases
+            while (sweepLineIt != edges.end() && std::abs((*sweepLineIt)->first->location.x() - currentPoint.x()) < 0.000001)
+            {
+                // But we have to ignore vertical edges in order to preserve the even/odd
+                // invariant of the active edge list
+                if (!edgeIsVertical(sweepLineIt->get()))
+                    activeEdges.insert(sweepLineIt->get());
+                sweepLineIt++;
+            }
+        }
 
         // Update current edge to be a part of whatever region the edge to the
         // left of it. It's odd/even state in the active edges list will determine
@@ -792,7 +824,9 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
         //      Reasoning: Logically, the first segment ever processed should hit this case
         //          And if we don't count 0 as divisible by 2, we'll hit the next case, which
         //          is supposed to be for interior loops
-        const bool startOfLoop = processedSegments.count(currentEdge.next) == 0 && processedSegments.count(currentEdge.previous) == 0;
+        //const bool startOfLoop = processedSegments.count(currentEdge.next) == 0 && processedSegments.count(currentEdge.previous) == 0;
+        //const bool endOfLoop   = processedSegments.count(currentEdge.next) != 0 && processedSegments.count(currentEdge.previous) != 0;
+        const bool startOfLoop = std::next(currentEdgeIt) != edges.end() && currentEdge.first == (*std::next(currentEdgeIt))->first;
         const bool endOfLoop   = processedSegments.count(currentEdge.next) != 0 && processedSegments.count(currentEdge.previous) != 0;
 
         if (startOfLoop && currEdgeActiveIndex % 2 == 0)
@@ -876,9 +910,8 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
             // If the previous is a vertical segment, go back one more
             // Since we simplified to remove colinear edges, we know that
             // there's no other cases
-            const bool firstEdgeIsVertical =
-                std::abs(currentEdge.previous->first->location.x() - currentEdge.previous->second->location.x()) < 0.00001;
-            const auto nextEdgePtr = firstEdgeIsVertical ? currentEdge.previous->previous : currentEdge.previous;
+            const bool firstEdgeIsVertical = edgeIsVertical(currentEdge.previous);
+            const auto nextEdgePtr         = firstEdgeIsVertical ? currentEdge.previous->previous : currentEdge.previous;
 
             //! ii. Mark the second edge as processed
             //
@@ -927,20 +960,22 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
             // returned will stay valid
             dcel.regions.reserve(dcel.regions.size() + 2);
 
-            // Create two new regions, and associate them with the
-            // edges created above
-            const auto& upperDcelRegion = *dcel.regions.emplace(dcel.regions.end(), new dcel::region_t);
-            const auto& lowerDcelRegion = *dcel.regions.emplace(dcel.regions.end(), new dcel::region_t);
-
             const auto edgeBelow = activeEdges[currEdgeActiveIndex - 1];
             const auto edgeAbove = activeEdges[nextEdgeActiveIndex + 1];
 
             auto downward = downwardEdge(currDcelEdge, edgeBelow, verticalEdges, dcel, dcelPoints);
 
-            downward->region = downward->next->region;
+            // If there's already a region assigned, it means
+            // we created this edge as the upward-edge of some other
+            // region; so we don't need to make a new one
+            if (downward->region == nullptr)
+            {
+                const auto& lowerDcelRegion = *dcel.regions.emplace(dcel.regions.end(), new dcel::region_t);
+                downward->region            = downward->next->region;
 
-            downward->twin->region = downward->twin->next->region = downward->twin->prev->region = lowerDcelRegion.get();
-            lowerDcelRegion->edge                                                                = downward->twin;
+                downward->twin->region = downward->twin->next->region = downward->twin->prev->region = lowerDcelRegion.get();
+                lowerDcelRegion->edge                                                                = downward->twin;
+            }
 
             dcel::half_edge_t* upward;
             if (firstEdgeIsVertical)
@@ -952,6 +987,8 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
             {
                 upward = upwardEdge(downward, edgeAbove, verticalEdges, dcel, dcelPoints);
             }
+
+            const auto& upperDcelRegion = *dcel.regions.emplace(dcel.regions.end(), new dcel::region_t);
 
             upward->twin->next->region = downward->region;
             upward->region = upward->next->region = upward->prev->region = upperDcelRegion.get();
