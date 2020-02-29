@@ -141,29 +141,18 @@ AssertionResult DcelIsValid(const DoublyConnectedEdgeList& dcel)
 // GTest checker that a DCEL has a specific structure, meaning
 // that it has the expected regions and that each region has the expected
 // set of points in the correct order
-//
-// TODO: Currently the regions must be in the same order in both pieces; that should
-// not be necessary
-AssertionResult DcelMatchesDescription(const DoublyConnectedEdgeList& dcel, const DcelDescription& description)
+AssertionResult DcelHasRegion(const DoublyConnectedEdgeList& dcel, const std::vector<geometry::Point2d>& expectedRegion)
 {
-    if (dcel.regions.size() != description.regions.size())
-        return AssertionFailure() << "dcel contains wrong number of regions :: got" << dcel.regions.size() << " expected "
-                                  << description.regions.size();
+    if (expectedRegion.empty())
+        return AssertionFailure() << "dcel description contains empty region";
 
-    auto resultIt   = dcel.regions.begin();
-    auto expectedIt = description.regions.begin();
+    int bestCase           = 0;
+    AssertionResult result = AssertionFailure();
 
-    for (; resultIt != dcel.regions.end(); resultIt++, expectedIt++)
+    for (const auto& resultRegion : dcel.regions)
     {
-        const auto regionIndex     = std::distance(description.regions.begin(), expectedIt);
-        const auto& resultRegion   = *(resultIt->get());
-        const auto& expectedRegion = *expectedIt;
-
-        if (expectedRegion.empty())
-            return AssertionFailure() << "dcel description contains empty region (" << regionIndex << ")";
-
         bool foundStart         = false;
-        dcel::half_edge_t* edge = resultRegion.edge;
+        dcel::half_edge_t* edge = resultRegion->edge;
 
         do
         {
@@ -172,30 +161,52 @@ AssertionResult DcelMatchesDescription(const DoublyConnectedEdgeList& dcel, cons
                 foundStart = true;
                 break;
             }
-        } while ((edge = edge->next) != resultRegion.edge);
+        } while ((edge = edge->next) != resultRegion->edge);
 
         if (!foundStart)
-            return AssertionFailure() << "expected region (" << regionIndex << ") start point" << to_string(expectedRegion.front())
-                                      << "not found";
+        {
+            if (bestCase < 1)
+            {
+                bestCase = 1;
+                result   = AssertionFailure() << "expected region start point" << to_string(expectedRegion.front()) << "not found";
+            }
+            continue;
+        }
 
         const dcel::half_edge_t* const firstEdge = edge;
         unsigned int matched                     = 0;
         auto expectedPointIt                     = expectedRegion.begin();
 
+        bool matchedAllPoints = true;
         do
         {
             if (!same(edge->origin->location, *expectedPointIt))
             {
-                return AssertionFailure() << "point " << std::distance(expectedRegion.begin(), expectedPointIt) << " of region "
-                                          << regionIndex << " does not match :: "
-                                          << "got " << to_string(edge->origin->location) << " expected " << to_string(*expectedPointIt);
+                if (bestCase < 2)
+                {
+                    bestCase = 2;
+                    result   = AssertionFailure()
+                             << "point " << std::distance(expectedRegion.begin(), expectedPointIt) << " does not match :: "
+                             << "got " << to_string(edge->origin->location) << " expected " << to_string(*expectedPointIt);
+                }
+                matchedAllPoints = false;
+                break;
             }
             matched++;
         } while ((edge = edge->next) != firstEdge && ++expectedPointIt != expectedRegion.end());
 
+        if (!matchedAllPoints)
+            continue;
+
         if (matched != expectedRegion.size())
-            return AssertionFailure() << "region " << regionIndex << " does not contain enough points :: got " << matched << " expected "
-                                      << expectedRegion.size();
+        {
+            if (bestCase < 3)
+            {
+                bestCase = 3;
+                result = AssertionFailure() << "does not contain enough points :: got " << matched << " expected " << expectedRegion.size();
+            }
+            continue;
+        }
 
         if (edge != firstEdge)
         {
@@ -203,9 +214,31 @@ AssertionResult DcelMatchesDescription(const DoublyConnectedEdgeList& dcel, cons
             {
                 matched++;
             } while ((edge = edge->next) != firstEdge);
-            return AssertionFailure() << "region " << regionIndex << " contains too many points :: got " << matched << " expected "
-                                      << expectedRegion.size();
+
+            if (bestCase < 3)
+            {
+                result = AssertionFailure() << "contains too many points :: got " << matched << " expected " << expectedRegion.size();
+            }
+            continue;
         }
+
+        return AssertionSuccess();
+    }
+
+    return result;
+}
+
+AssertionResult DcelMatchesDescription(const DoublyConnectedEdgeList& dcel, const DcelDescription& description)
+{
+    if (dcel.regions.size() != description.regions.size())
+        return AssertionFailure() << "dcel contains wrong number of regions :: got" << dcel.regions.size() << " expected "
+                                  << description.regions.size();
+
+    for (size_t i = 0; i < description.regions.size(); i++)
+    {
+        auto resultThisRegion = DcelHasRegion(dcel, description.regions[i]);
+        if (!resultThisRegion)
+            return resultThisRegion << " (region " << i << ")";
     }
 
     return AssertionSuccess();
