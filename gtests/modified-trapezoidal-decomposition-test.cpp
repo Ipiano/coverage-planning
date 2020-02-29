@@ -216,7 +216,7 @@ typedef std::pair<geometry::Polygon2d, DcelDescription> PolygonAndDcel;
 class ModifiedTrapezoidalPolygonDecomposition : public testing::TestWithParam<PolygonAndDcel>
 {
   protected:
-    polygon_decomposer::ModifiedTrapezoidal decomposer = {0};
+    polygon_decomposer::ModifiedTrapezoidal decomposer;
     geometry::Polygon2d poly;
 
     void SetUp() override

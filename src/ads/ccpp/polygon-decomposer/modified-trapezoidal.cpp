@@ -1042,28 +1042,13 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
     return dcel;
 }
 
-ModifiedTrapezoidal::ModifiedTrapezoidal(const quantity::Radians sweepDir) : m_sweepDir(sweepDir)
+ModifiedTrapezoidal::ModifiedTrapezoidal()
 {
 }
 
 DoublyConnectedEdgeList ModifiedTrapezoidal::decomposePolygon(const geometry::Polygon2d& poly) const
 {
-    // Move shape to origin, and rotate so sweep dir is positive X direction
-    // TODO Maybe: Move this out of this object
-    const auto transform    = moveToOriginAndRotateCCWTransform(poly, -m_sweepDir);
-    const auto invTransform = boost::geometry::strategy::transform::inverse_transformer<double, 2, 2>(transform);
-
-    geometry::Polygon2d adjustedPoly;
-    boost::geometry::transform(poly, adjustedPoly, transform);
-
-    // Do decomposition
-    auto dcel = decompose(adjustedPoly);
-
-    // Rotate back to original orientation
-    for (const auto& point : dcel.vertices)
-        bg::transform(point->location, point->location, invTransform);
-
-    return dcel;
+    return decompose(poly);
 }
 }
 }

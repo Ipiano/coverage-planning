@@ -14,12 +14,9 @@ namespace polygon_decomposer
 class ModifiedTrapezoidal : public interfaces::PolygonDecomposerIf
 {
   public:
-    ModifiedTrapezoidal(const quantity::Radians sweepDir);
+    ModifiedTrapezoidal();
 
     DoublyConnectedEdgeList decomposePolygon(const geometry::Polygon2d& poly) const override;
-
-  private:
-    quantity::Radians m_sweepDir;
 };
 }
 }

@@ -4,6 +4,7 @@
 #include "ads/ccpp/initial-cost/min-across-angles.hpp"
 #include "ads/ccpp/turn-cost/u-shaped.h"
 #include "ads/ccpp/polygon-decomposer/modified-trapezoidal.h"
+#include "ads/ccpp/coordinate-transform.hpp"
 
 #include "ads/ccpp/desktop-tool/coordinate-transform.h"
 #include "ads/ccpp/dcel.h"
@@ -181,8 +182,19 @@ void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::radian>& shape)
     const auto initialResult = initialCost.calculateInitialDirection(shapeXY);
     m_sweepDir               = initialResult;
 
-    ccpp::polygon_decomposer::ModifiedTrapezoidal decomposer(m_sweepDir);
-    const auto dcel = decomposer.decomposePolygon(shapeXY);
+    // Move shape to origin, and rotate so sweep dir is positive X direction
+    const auto transform    = ccpp::moveToOriginAndRotateCCWTransform(shapeXY, -m_sweepDir);
+    const auto invTransform = boost::geometry::strategy::transform::inverse_transformer<double, 2, 2>(transform);
+
+    ccpp::geometry::Polygon2d adjustedShapeXY;
+    boost::geometry::transform(shapeXY, adjustedShapeXY, transform);
+
+    ccpp::polygon_decomposer::ModifiedTrapezoidal decomposer;
+    const auto dcel = decomposer.decomposePolygon(adjustedShapeXY);
+
+    //Rotate back to original orientation
+    for (const auto& point : dcel.vertices)
+        bg::transform(point->location, point->location, invTransform);
 
     const auto rect   = m_rawShape->boundingRect();
     const auto diag   = std::sqrt(rect.width() * rect.width() + rect.height() * rect.height());
