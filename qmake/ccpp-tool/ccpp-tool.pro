@@ -21,3 +21,5 @@ HEADERS += \
     $$TOOL_ROOT/ui/mainwindow.h \
     $$TOOL_ROOT/coordinate-transform.h \
     $$TOOL_ROOT/typedefs.h
+
+QMAKE_CXXFLAGS += -Wno-deprecated-copy

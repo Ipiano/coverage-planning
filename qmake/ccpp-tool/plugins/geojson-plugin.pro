@@ -18,3 +18,5 @@ SOURCES += \
 
 HEADERS += \
     $$PLUGINS_ROOT/geojson.h
+
+QMAKE_CXXFLAGS += -Wno-deprecated-copy

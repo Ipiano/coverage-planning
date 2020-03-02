@@ -16,3 +16,4 @@ LIBS += -lboost_regex
 
 SOURCES += $$files($$TEST_ROOT/*test.cpp, true)
 
+QMAKE_CXXFLAGS += -Wno-deprecated-copy
