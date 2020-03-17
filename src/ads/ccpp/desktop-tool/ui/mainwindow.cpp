@@ -172,8 +172,9 @@ void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::radian>& shape)
     bg::strategy::transform::scale_transformer<double, 2, 2> scale(1e6, 1e6);
     bg::transform(shapeXY2, shapeXY1, scale);
 
-    const auto& shapeXY = shapeXY1;
-    m_rawShape          = createItem(shapeXY);
+    const auto& scaledShapeXY = shapeXY1;
+    const auto& shapeXY       = shapeXY1;
+    m_rawShape                = createItem(scaledShapeXY);
 
     ccpp::turn_cost::UShaped turnCost(1 / 0.5, 1 / 2., 1 / 2.);
     ccpp::optimal_direction::MinAcrossAngles dirCalculator(turnCost);
@@ -189,25 +190,34 @@ void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::radian>& shape)
     ccpp::geometry::Polygon2d adjustedShapeXY;
     boost::geometry::transform(shapeXY, adjustedShapeXY, transform);
 
-    ccpp::polygon_decomposer::ModifiedTrapezoidal decomposer;
-    const auto dcel = decomposer.decomposePolygon(adjustedShapeXY);
+    try
+    {
+        ccpp::polygon_decomposer::ModifiedTrapezoidal decomposer;
+        const auto dcel = decomposer.decomposePolygon(adjustedShapeXY);
 
-    //Rotate back to original orientation
-    for (const auto& point : dcel.vertices)
-        bg::transform(point->location, point->location, invTransform);
+        //Rotate back to original orientation
+        //and scale up for displaying
+        for (const auto& point : dcel.vertices)
+            bg::transform(point->location, point->location, invTransform);
+
+        /*const ccpp::DoublyConnectedEdgeList dcel(shapeXY);
+        auto edges = dcel.edges(dcel.insideFace());
+        ccpp::sortEdges(edges, initialResult);
+        m_sweepPath = createSweepPath(edges);*/
+
+        m_decomposition = createRegions(dcel);
+        m_scene->addItem(m_decomposition);
+    }
+    catch (std::exception& ex)
+    {
+        m_decomposition = new QGraphicsItemGroup();
+        m_scene->addItem(m_decomposition);
+    }
 
     const auto rect   = m_rawShape->boundingRect();
     const auto diag   = std::sqrt(rect.width() * rect.width() + rect.height() * rect.height());
     m_initialDirArrow = createArrow(bg::make_zero<ccpp::geometry::Point2d>(), 0.25 * diag, initialResult);
 
-    /*const ccpp::DoublyConnectedEdgeList dcel(shapeXY);
-    auto edges = dcel.edges(dcel.insideFace());
-    ccpp::sortEdges(edges, initialResult);
-    m_sweepPath = createSweepPath(edges);*/
-
-    m_decomposition = createRegions(dcel);
-
-    m_scene->addItem(m_decomposition);
     m_scene->addItem(m_rawShape);
     m_scene->addItem(m_initialDirArrow);
     //m_scene->addItem(m_sweepPath);
@@ -235,7 +245,7 @@ QGraphicsItem* createItem(const ccpp::geometry::Ring2d& ring)
                    [](const ccpp::geometry::Point2d& pt) { return QPointF(bg::get<0>(pt), bg::get<1>(pt)); });
 
     QGraphicsPolygonItem* ringGraphic = new QGraphicsPolygonItem(qRing);
-    ringGraphic->setPen(QPen(QBrush(QColor(0, 0, 0, 62)), 5));
+    ringGraphic->setPen(QPen(QBrush(QColor(0, 0, 0, 90)), 5));
     return ringGraphic;
 }
 
