@@ -177,8 +177,9 @@ class ActiveEdgeList
                                      [&](const Edge* e2) {
                                          return (e2->second->location.x() < e->first->location.x()) ||
                                                 (e2->second->location.x() <= e->first->location.x() &&
-                                                 e2->second->location.y() <= e->first->location.y() &&
-                                                 (e2 == e->next || e2 == e->previous));
+                                                 e2->second->location.y() <= e->first->location.y()/* &&
+                                                 (e2 == e->next || e2 == e->previous || (e2 == e->next->next && edgeIsVertical(e->next)) ||
+                                                  (e2 == e->previous->previous && edgeIsVertical(e->previous)))*/);
                                      }),
                       m_edges.end());
     }
@@ -436,6 +437,11 @@ dcel::half_edge_t* downwardEdge(dcel::half_edge_t* edgeFromPointAbove, Edge* edg
     // returned will stay valid
     dcel.edges.reserve(dcel.edges.size() + 3);
 
+    // Assume that the intersection happens right on the edge
+    // of the segment below
+    auto leftOfIntersection  = edgeBelow->halfEdge->next;
+    auto rightOfIntersection = edgeBelow->halfEdge;
+
     // Create the twin edges for that vertical line
     const auto& downwardHalfEdge = *dcel.edges.emplace(dcel.edges.end(), new dcel::half_edge_t);
     const auto& upwardHalfEdge   = *dcel.edges.emplace(dcel.edges.end(), new dcel::half_edge_t);
@@ -454,11 +460,6 @@ dcel::half_edge_t* downwardEdge(dcel::half_edge_t* edgeFromPointAbove, Edge* edg
 
     //upwardHalfEdge->region   = upwardHalfEdge->next->region;
     //downwardHalfEdge->region = downwardHalfEdge->prev->region;
-
-    // Assume that the intersection happens right on the edge
-    // of the segment below
-    auto leftOfIntersection  = edgeBelow->halfEdge->next;
-    auto rightOfIntersection = edgeBelow->halfEdge;
 
     // Check if the intersection happens on the right side
     // of the half edge below
@@ -682,10 +683,10 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
     //  at the same place? Do we just cut a vertical through them all?
     double lastVerticalXCoord = std::numeric_limits<double>::lowest();
 
-    const auto completeUnfinishedEdges = [&](const double sweepLineXCoord) {
+    const auto completeUnfinishedEdges = [&](const dcel::vertex_t& sweepLinePoint) {
         // If the current edge's left-most point further right than the unfinished edge's right point, then
         // we can process the unfinished edge and make a vertical up and down from it
-        while (unfinishedEdges.size() > 0 && unfinishedEdges.next()->second->location.x() < sweepLineXCoord)
+        while (unfinishedEdges.size() > 0 && vertexLessThan(*unfinishedEdges.next()->second, sweepLinePoint))
         {
             auto currentEdgePtr = unfinishedEdges.next();
             auto& currentEdge   = *currentEdgePtr;
@@ -695,21 +696,23 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
             activeEdges.removeLessThan(currentEdge.second->location);
 
             const auto activeEdgeIndex = activeEdges.indexOf(currentEdgePtr);
-            assert(activeEdgeIndex > 0 && activeEdgeIndex < activeEdges.size() - 1);
 
             const auto adjacentEdgeAttachedAtSecondPoint =
                 currentEdge.previous->second == currentEdge.second ? currentEdge.previous : currentEdge.next;
-            const auto edgeImmediatelyAbove = activeEdges[activeEdgeIndex + 1];
 
-            const bool isBottomEdge = edgeImmediatelyAbove == adjacentEdgeAttachedAtSecondPoint;
+            const bool isBottomEdge = activeEdges.indexOf(adjacentEdgeAttachedAtSecondPoint) > activeEdgeIndex;
             const bool isVertical   = edgeIsVertical(currentEdgePtr);
 
             const auto upperEdgeIndex = isBottomEdge ? activeEdgeIndex + 1 : activeEdgeIndex;
             const auto lowerEdgeIndex = isBottomEdge ? activeEdgeIndex : activeEdgeIndex - 1;
 
-            // This is a weird concavity where making a vertical
-            // line would go through the hole, and we don't care
-            // about doing that; so we can just skip it
+            // Concavity on the 'left' side of an internal hole
+            // Drawing a line up or down would result in a line that's
+            // inside the hole, so we ignore it
+            //
+            // Also handles when there is a convexity on the
+            // closing side of the outer loop, then there's nothing
+            // to draw a line up or downards to
             if ((lowerEdgeIndex % 2) == 0)
             {
                 unfinishedEdges.pop();
@@ -728,40 +731,56 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
             const auto edgeBelow = activeEdges[lowerEdgeIndex - 1];
             const auto edgeAbove = activeEdges[upperEdgeIndex + 1];
 
-            dcel::half_edge_t* downward;
-            if (isVertical)
+            // Edge Case: A Z shape on the 'left' side
+            // of the exterior loop. There needs to be an
+            // edge created going upward, but not one going
+            // down
+
+            dcel::half_edge_t* upward;
+            if (isVertical && currentEdge.next->first->location.x() < currentEdge.first->location.x() &&
+                currentEdge.previous->second->location.x() > currentEdge.first->location.x())
             {
-                downward = downwardEdge(lowerDcelEdge, edgeBelow, verticalEdges, dcel, dcelPoints);
+                upward         = upwardEdge(upperDcelEdge, edgeAbove, verticalEdges, dcel, dcelPoints);
+                upward->region = upward->prev->region;
             }
             else
             {
-                downward = downwardEdge(upperDcelEdge, edgeBelow, verticalEdges, dcel, dcelPoints);
+
+                dcel::half_edge_t* downward;
+                if (isVertical)
+                {
+                    downward = downwardEdge(lowerDcelEdge, edgeBelow, verticalEdges, dcel, dcelPoints);
+                }
+                else
+                {
+                    downward = downwardEdge(upperDcelEdge, edgeBelow, verticalEdges, dcel, dcelPoints);
+                }
+
+                // If the upward half was default-assigned to have the same
+                // region as the thing it now is attached to, we need to replace
+                // that region on the upward half with a new one. Otherwise,
+                // it was previously created for an unfinished edge below us
+                // and we should just use that new region
+                if (downward->region == nullptr)
+                {
+                    // Create new region to be the resulting one after closing the lower and upper regions
+                    // for the hole
+                    const auto& newDcelRegion = *dcel.regions.emplace(dcel.regions.end(), new dcel::region_t);
+                    downward->twin->region = downward->twin->prev->region = newDcelRegion.get();
+
+                    newDcelRegion->edge = downward->twin;
+                    downward->region    = downward->next->region;
+                }
+
+                if (isVertical)
+                {
+                    lowerDcelEdge->region = downward->twin->region;
+                }
+
+                upward = upwardEdge(upperDcelEdge, edgeAbove, verticalEdges, dcel, dcelPoints);
+
+                upward->region = upward->prev->region = downward->twin->region;
             }
-
-            // If the upward half was default-assigned to have the same
-            // region as the thing it now is attached to, we need to replace
-            // that region on the upward half with a new one. Otherwise,
-            // it was previously created for an unfinished edge below us
-            // and we should just use that new region
-            if (downward->region == nullptr)
-            {
-                // Create new region to be the resulting one after closing the lower and upper regions
-                // for the hole
-                const auto& newDcelRegion = *dcel.regions.emplace(dcel.regions.end(), new dcel::region_t);
-                downward->twin->region = downward->twin->prev->region = newDcelRegion.get();
-
-                newDcelRegion->edge = downward->twin;
-                downward->region    = downward->next->region;
-            }
-
-            if (isVertical)
-            {
-                lowerDcelEdge->region = downward->twin->region;
-            }
-
-            auto upward = upwardEdge(upperDcelEdge, edgeAbove, verticalEdges, dcel, dcelPoints);
-
-            upward->region = upward->prev->region = downward->twin->region;
 
             // If we've reached the top of the shape, then we may need
             // to adjust a line that was previously set as a different
@@ -807,7 +826,7 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
         //  Once we connect to the edges above and below in the active edge list, then
         //  what? Do we remove them and that forms a new polygon? Probably yes.
 
-        completeUnfinishedEdges(currentPoint.x());
+        completeUnfinishedEdges(*currentEdge.first);
 
         //! d. Update the active edge list, adding the new edge, and removing any
         //! edges that have gone out of scope
@@ -892,8 +911,13 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
         //          is supposed to be for interior loops
         //const bool startOfLoop = processedSegments.count(currentEdge.next) == 0 && processedSegments.count(currentEdge.previous) == 0;
         //const bool endOfLoop   = processedSegments.count(currentEdge.next) != 0 && processedSegments.count(currentEdge.previous) != 0;
+
+        // Finds the 'bottom' edge of all opening loops
         const bool startOfLoop = std::next(currentEdgeIt) != edges.end() && currentEdge.first == (*std::next(currentEdgeIt))->first;
-        const bool endOfLoop   = currentEdge.second == currentEdge.next->second;
+
+        // Finds the 'bottom' edge when the segments are going 'upward'
+        // and finds the 'top' edge when the segments are going 'downward'
+        const bool endOfLoop = currentEdge.second == currentEdge.next->second;
 
         if (startOfLoop && currEdgeActiveIndex % 2 == 0)
         {
@@ -943,11 +967,13 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
             //
             //  Clarification:
             //      Mark the new edge as processed at the same time
-            const auto nextEdgeActiveIndex = activeEdges.insert(nextEdgePtr);
 
-            assert(nextEdgeActiveIndex == currEdgeActiveIndex + 1);
+            // Next edge is going to have the same first coordinate, so it
+            // will already be in the active edge list (and if it's not, it's because
+            // it's vertical, and we don't want it in there anyway)
+            //const auto nextEdgeActiveIndex = activeEdges.insert(nextEdgePtr);
 
-            //processedSegments.insert(nextEdgePtr);
+            //assert(nextEdgeActiveIndex == currEdgeActiveIndex + 1);
 
             //! iv. Connect the two edges together
             //  Which two edges? The segment from the loop and the next segment on the polygon?
@@ -980,10 +1006,7 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
             const auto nextEdgePtr         = firstEdgeIsVertical ? currentEdge.previous->previous : currentEdge.previous;
 
             //! ii. Mark the second edge as processed
-            //
-            //  Wasn't explicitly listed in part 'e' above, but I added it
-            //  there because it's here and that makes sense
-            //processedSegments.insert(nextEdgePtr);
+            processedSegments.insert(nextEdgePtr);
 
             if (firstEdgeIsVertical)
                 processedSegments.insert(currentEdge.previous);
@@ -1043,22 +1066,29 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
                 lowerDcelRegion->edge                                                                = downward->twin;
             }
 
-            dcel::half_edge_t* upward;
-            if (firstEdgeIsVertical)
+            // Edge case: This is on the outer loop, and it's a Z shape; then there's
+            // no edge above to connect to, just one below
+            // The end result of this is that the edge above us is the same edge
+            // as the 'top' side of the loop we're creating
+            if (edgeAbove != nextEdgePtr)
             {
-                downward->prev->region = downward->region;
-                upward                 = upwardEdge(downward->prev, edgeAbove, verticalEdges, dcel, dcelPoints);
-            }
-            else
-            {
-                upward = upwardEdge(downward, edgeAbove, verticalEdges, dcel, dcelPoints);
-            }
+                dcel::half_edge_t* upward;
+                if (firstEdgeIsVertical)
+                {
+                    downward->prev->region = downward->region;
+                    upward                 = upwardEdge(downward->prev, edgeAbove, verticalEdges, dcel, dcelPoints);
+                }
+                else
+                {
+                    upward = upwardEdge(downward, edgeAbove, verticalEdges, dcel, dcelPoints);
+                }
 
-            const auto& upperDcelRegion = *dcel.regions.emplace(dcel.regions.end(), new dcel::region_t);
+                const auto& upperDcelRegion = *dcel.regions.emplace(dcel.regions.end(), new dcel::region_t);
 
-            upward->twin->next->region = downward->region;
-            upward->region = upward->next->region = upward->prev->region = upperDcelRegion.get();
-            upperDcelRegion->edge                                        = upward;
+                upward->twin->next->region = downward->region;
+                upward->region = upward->next->region = upward->prev->region = upperDcelRegion.get();
+                upperDcelRegion->edge                                        = upward;
+            }
 
             if (endOfLoop)
                 unfinishedEdges.insert(currentEdgePtr.get());
@@ -1128,8 +1158,11 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
         }
     };
 
+    dcel::vertex_t rightPlus1;
+    rightPlus1.location = {edges.back()->second->location.x() + 1, edges.back()->second->location.y()};
+
     // Complete any unfinished edges created in the last step
-    completeUnfinishedEdges(edges.back()->second->location.x() + 1);
+    completeUnfinishedEdges(rightPlus1);
 
     // Remove any unused regions in the dcel; this is rare, but can happen
     std::unordered_set<const dcel::region_t*> unusedRegions;
