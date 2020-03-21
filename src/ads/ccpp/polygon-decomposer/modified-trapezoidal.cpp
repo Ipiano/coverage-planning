@@ -24,237 +24,6 @@ struct vertex_index
     const result_type& operator()(const dcel::vertex_t* v) const { return v->location; }
 };
 
-struct Edge
-{
-    // Vertices that the edge goes between.
-    // Will be eventually sorted so first is the bottom-leftmost point.
-    // These link into the eventual result dcel from the algorithm.
-    dcel::vertex_t *first = nullptr, *second = nullptr;
-
-    // Pointers to the adjacent edges on whatever loop this edge
-    // is a part of
-    Edge *previous = nullptr, *next = nullptr;
-
-    // Pointer to the most recent dcel edge created
-    // which ends at the right-most point of this segment.
-    // The dcel edge for the edge attached to this one
-    // should point to this half edge.
-    dcel::half_edge_t* halfEdge = nullptr;
-};
-
-bool pointsHaveSameXCoord(const dcel::vertex_t* v1, const dcel::vertex_t* v2)
-{
-    return std::abs(v1->location.x() - v2->location.x()) < 0.00001;
-}
-
-bool edgeIsVertical(const Edge* e)
-{
-    return pointsHaveSameXCoord(e->first, e->second);
-}
-
-// < operator for verticies, sorts left->right, bottom->top
-bool vertexLessThan(const dcel::vertex_t& left, const dcel::vertex_t& right)
-{
-    if (left.location.x() < right.location.x())
-        return true;
-    else if (left.location.x() > right.location.x())
-        return false;
-    else
-        return left.location.y() < right.location.y();
-};
-
-template <class SegmentT> geometry::Point2d unit(const SegmentT s)
-{
-    const double mag = bg::distance(s.first, s.second);
-
-    geometry::Point2d unitV = s.second;
-    bg::subtract_point(unitV, s.first);
-    bg::divide_value(unitV, mag);
-
-    return unitV;
-}
-
-struct angleLessThan
-{
-    // Sorts two edges based on their angles;
-    // edges are sorted from -PI/2 to PI/2
-    // Assumes that the points of the edge have already
-    // been swapped such that the leftmost one is first
-    bool operator()(const Edge* e1, const Edge* e2) const { return valueOf(e1) < valueOf(e2); }
-
-  private:
-    geometry::Point2d unit(const Edge* e) const
-    {
-        return polygon_decomposer::unit(geometry::ConstReferringSegment2d(e->first->location, e->second->location));
-    }
-
-    double valueOf(const Edge* e) const { return bg::dot_product(unit(e), geometry::Point2d {0, 1}); }
-};
-
-bool edgeLessThan(const std::unique_ptr<Edge>& left, const std::unique_ptr<Edge>& right)
-{
-    if (left->first == right->first)
-        return angleLessThan()(left.get(), right.get());
-    return vertexLessThan(*left->first, *right->first);
-}
-
-// For the sake of the active edge list, we keep track of them 'vertically'
-// by checking if a point on the second is to the left of a point on the other
-// line. If this is the case then we know the second one must be 'above' the first
-// one for its entire distance because there are now intersections
-bool activeEdgeLessThan(const Edge* l, const Edge* r)
-{
-    // First check if one is just wholly above the other
-    double minYL = l->first->location.y();
-    double maxYL = l->second->location.y();
-    if (minYL > maxYL)
-        std::swap(minYL, maxYL);
-
-    double minYR = r->first->location.y();
-    double maxYR = r->second->location.y();
-    if (minYR > maxYR)
-        std::swap(minYR, maxYR);
-
-    if (maxYL < minYR)
-        return true;
-    else if (maxYR < minYL)
-        return false;
-
-    // Make unit vectors out of the edges; and check dot products
-    const auto unitL1L2   = unit(geometry::ConstReferringSegment2d(l->first->location, l->second->location));
-    const auto normalL1L2 = geometry::Point2d {-unitL1L2.y(), unitL1L2.x()};
-    const auto unitL1R1   = unit(geometry::ConstReferringSegment2d(l->first->location, r->first->location));
-    const auto unitL1R2   = unit(geometry::ConstReferringSegment2d(l->first->location, r->second->location));
-
-    // TODO: Use different epsilon?
-    if (r->first == l->first || r->first == l->second || std::abs(bg::dot_product(normalL1L2, unitL1R1) - 1) < 0.00001)
-        return bg::dot_product(normalL1L2, unitL1R2) > 0;
-    return bg::dot_product(normalL1L2, unitL1R1) > 0;
-}
-
-// List of unfinished edges sorted in sweep line order
-// by the second point on the segments
-//
-// TODO: Maybe build on priority_queue
-class UnfinishedEdgeList
-{
-    std::vector<Edge*> m_edges;
-
-  public:
-    size_t size() const { return m_edges.size(); }
-    void insert(Edge* e)
-    {
-        const auto insertIt = std::lower_bound(m_edges.begin(), m_edges.end(), e,
-                                               [](const Edge* e1, const Edge* e2) { return vertexLessThan(*e1->second, *e2->second); });
-        m_edges.insert(insertIt, e);
-    }
-
-    Edge* next() { return m_edges.front(); }
-    void pop() { m_edges.erase(m_edges.begin()); }
-};
-
-class ActiveEdgeList
-{
-    std::vector<Edge*> m_edges;
-
-  public:
-    size_t size() const { return m_edges.size(); }
-    size_t insert(Edge* e)
-    {
-        const auto currEdgeInsertIt = std::lower_bound(m_edges.begin(), m_edges.end(), e, &activeEdgeLessThan);
-        const auto activeEdgeIndex  = static_cast<unsigned long>(std::distance(m_edges.begin(), currEdgeInsertIt));
-
-        // Prevent double insertions
-        if (currEdgeInsertIt == m_edges.end() || *currEdgeInsertIt != e)
-            m_edges.insert(currEdgeInsertIt, e);
-
-        return activeEdgeIndex;
-    }
-
-    void removeLessThanEqual(const Edge* e)
-    {
-        m_edges.erase(std::remove_if(m_edges.begin(), m_edges.end(),
-                                     [&](const Edge* e2) {
-                                         return (e2->second->location.x() < e->first->location.x()) ||
-                                                (e2->second->location.x() <= e->first->location.x() &&
-                                                 e2->second->location.y() <= e->first->location.y()/* &&
-                                                 (e2 == e->next || e2 == e->previous || (e2 == e->next->next && edgeIsVertical(e->next)) ||
-                                                  (e2 == e->previous->previous && edgeIsVertical(e->previous)))*/);
-                                     }),
-                      m_edges.end());
-    }
-
-    void removeLessThan(const geometry::Point2d& p)
-    {
-        m_edges.erase(std::remove_if(m_edges.begin(), m_edges.end(), [&](const Edge* e) { return (e->second->location.x() < p.x()); }),
-                      m_edges.end());
-    }
-
-    void removeSpecific(const Edge* e)
-    {
-        const auto targetIt = std::find(m_edges.begin(), m_edges.end(), e);
-        if (targetIt != m_edges.end())
-            m_edges.erase(targetIt);
-    }
-
-    size_t indexOf(const Edge* e)
-    {
-        const auto edgeIt = std::lower_bound(m_edges.begin(), m_edges.end(), e, &activeEdgeLessThan);
-        if (*edgeIt == e)
-            return std::distance(m_edges.begin(), edgeIt);
-        return m_edges.size();
-    }
-
-    Edge* operator[](const size_t index) { return m_edges[index]; }
-};
-
-bool verticalEdgeVertexLessThan(const dcel::half_edge_t* e, const dcel::vertex_t* v)
-{
-    return e->origin->location.x() < v->location.x();
-}
-
-bool vertexVerticalEdgeLessThan(const dcel::vertex_t* v, const dcel::half_edge_t* e)
-{
-    return v->location.x() < e->origin->location.x();
-}
-
-bool verticalEdgeLessThan(const dcel::half_edge_t* l, const dcel::half_edge_t* r)
-{
-    return verticalEdgeVertexLessThan(l, r->origin);
-}
-
-class VerticalEdgeList
-{
-    std::vector<dcel::half_edge_t*> m_edges;
-
-  public:
-    // Should always insert the downward edge
-    void insert(dcel::half_edge_t* edge)
-    {
-        assert(edge && edge->twin && edge->origin && edge->twin->origin);
-        assert(std::abs(edge->origin->location.x() - edge->twin->origin->location.x()) < 0.00001);
-        assert(edge->origin->location.y() >= edge->twin->origin->location.y());
-
-        const auto insertIt = std::lower_bound(m_edges.begin(), m_edges.end(), edge, verticalEdgeLessThan);
-        m_edges.insert(insertIt, edge);
-    }
-
-    dcel::half_edge_t* getEdge(const dcel::vertex_t* v1, const dcel::vertex_t* v2)
-    {
-        auto firstIt      = std::lower_bound(m_edges.begin(), m_edges.end(), v1, verticalEdgeVertexLessThan);
-        const auto lastIt = std::upper_bound(m_edges.begin(), m_edges.end(), v1, vertexVerticalEdgeLessThan);
-
-        for (; firstIt != lastIt; firstIt++)
-        {
-            if (((*firstIt)->origin == v1 && (*firstIt)->twin->origin == v2) ||
-                ((*firstIt)->origin == v2 && (*firstIt)->twin->origin == v1))
-                return *firstIt;
-        }
-
-        return nullptr;
-    }
-};
-
 // Manages matching x,y points to the
 // pointers for a DCEL
 class DCELPointFactory
@@ -293,10 +62,347 @@ class DCELPointFactory
     };
 };
 
+// < operator for verticies, sorts left->right, bottom->top
+bool vertexLessThan(const dcel::vertex_t& left, const dcel::vertex_t& right)
+{
+    if (left.location.x() < right.location.x())
+        return true;
+    else if (left.location.x() > right.location.x())
+        return false;
+    else
+        return left.location.y() < right.location.y();
+};
+
+bool pointsHaveSameXCoord(const dcel::vertex_t* v1, const dcel::vertex_t* v2)
+{
+    return std::abs(v1->location.x() - v2->location.x()) < 0.00001;
+}
+
+template <class SegmentT> geometry::Point2d unit(const SegmentT s)
+{
+    const double mag = bg::distance(s.first, s.second);
+
+    geometry::Point2d unitV = s.second;
+    bg::subtract_point(unitV, s.first);
+    bg::divide_value(unitV, mag);
+
+    return unitV;
+}
+
+struct Edge
+{
+    // Pointer to the most recent dcel edge created
+    // which ends at the right-most point of this segment.
+    // The dcel edge for the edge attached to this one
+    // should point to this half edge.
+    dcel::half_edge_t* halfEdge = nullptr;
+
+    // Gets the points of the edge
+    dcel::vertex_t* firstPoint() const { return first_; }
+    dcel::vertex_t* secondPoint() const { return second_; }
+
+    // Gets the edge attached at a specific point on the edge
+    Edge* firstEdge() const
+    {
+        if (nextEdge()->firstPoint() == firstPoint() && nextEdge()->secondPoint() == firstPoint())
+            return nextEdge();
+        return previousEdge();
+    }
+
+    Edge* secondEdge() const { return firstEdge() == nextEdge() ? previousEdge() : nextEdge(); }
+
+    // Traverses the loop in the order it was given
+    Edge* nextEdge() const { return next_; }
+    Edge* previousEdge() const { return previous_; }
+
+    // Traverses the loop a specific direction
+    Edge* clockwiseEdge() const { return clockwise_; }
+    Edge* counterClockwiseEdge() const { return counterclockwise_; }
+
+    bool isOuterLoop() const { return isOuterLoop_; }
+
+    bool isVertical() const { return isVertical_; }
+
+    // Finds vertical edges that are not
+    // an opening or closing edge of a loop
+    //
+    // These are never the opening or closing
+    // sides of loops; they're always on the
+    // top or bottom side of a loop.
+    bool isVerticalZigZag() const
+    {
+        if (!isVertical())
+            return false;
+
+        /* Check for one of these two cases
+         *
+         *    *->-  ->-*
+         *    |        |
+         *    ^        ^
+         *    |        |
+         * ->-*        *->-
+         *
+         */
+        return (secondEdge()->secondPoint() == secondPoint() && firstEdge()->firstPoint() == firstPoint()) ||
+               (secondEdge()->firstPoint() == secondPoint() && firstEdge()->secondPoint() == firstPoint());
+    }
+
+    // Always finds the 'top' side
+    // of a loop start and end, to guarantee
+    // the edge below was previously processed
+    bool isLoopStart() const { return !isVerticalZigZag() && firstPoint() == counterClockwiseEdge()->firstPoint(); }
+
+    bool isLoopEnd() const
+    {
+        if (isVerticalZigZag())
+            return false;
+        if (isVertical())
+            return secondPoint() == counterClockwiseEdge()->secondPoint();
+        return secondPoint() == clockwiseEdge()->secondPoint();
+    }
+
+    geometry::Point2d unit() const
+    {
+        return polygon_decomposer::unit(geometry::ConstReferringSegment2d(firstPoint()->location, secondPoint()->location));
+    }
+
+  private:
+    // Vertices that the edge goes between.
+    // Will be eventually sorted so first is the bottom-leftmost point.
+    // These link into the eventual result dcel from the algorithm.
+    dcel::vertex_t *first_ = nullptr, *second_ = nullptr;
+
+    // Pointers to the adjacent edges on whatever loop this edge
+    // is a part of
+    Edge *previous_ = nullptr, *next_ = nullptr;
+
+    // Pointers to the adjacent edges in a specific direction on
+    // whatever loop this edge is on
+    Edge *clockwise_ = nullptr, *counterclockwise_ = nullptr;
+
+    // Set to true if the edge was created
+    // from the outer loop
+    bool isOuterLoop_ = false;
+
+    // Cached value to avoid having to compute it
+    // a lot
+    bool isVertical_ = false;
+
+    bool angleLessThan(const Edge* other) { return angleLessThan(*other); }
+    bool angleLessThan(const Edge& other) { return unitDotWithHorizontal() < other.unitDotWithHorizontal(); }
+
+    // TODO: Not guaranteed to sort correctly when
+    // two edges on separate loops have the same first
+    // point and same angle
+    bool operator<(const Edge* other) { return operator<(*other); }
+    bool operator<(const Edge& other)
+    {
+        if (firstPoint() == other.firstPoint())
+        {
+            // Always process vertical edges before
+            // edge connected to their bottom
+            // point
+            if (isVertical())
+                return true;
+
+            return angleLessThan(other);
+        }
+        return vertexLessThan(*firstPoint(), *other.firstPoint());
+    }
+
+    double unitDotWithHorizontal() const { return bg::dot_product(unit(), geometry::Point2d {0, 1}); }
+
+    friend std::vector<std::unique_ptr<Edge>> buildSortedEdgeList(const geometry::Polygon2d& poly, DoublyConnectedEdgeList& dcel,
+                                                                  DCELPointFactory& dcelPoints);
+};
+
+// List of unfinished edges sorted in sweep line order
+// by the second point on the segments
+//
+// TODO: Maybe build on priority_queue
+class UnfinishedEdgeList
+{
+    std::vector<Edge*> m_edges;
+
+  public:
+    size_t size() const { return m_edges.size(); }
+    void insert(Edge* e)
+    {
+        const auto insertIt = std::lower_bound(m_edges.begin(), m_edges.end(), e, [](const Edge* e1, const Edge* e2) {
+            return vertexLessThan(*e1->secondPoint(), *e2->secondPoint());
+        });
+        m_edges.insert(insertIt, e);
+    }
+
+    Edge* next() { return m_edges.front(); }
+    void pop() { m_edges.erase(m_edges.begin()); }
+};
+
+class ActiveEdgeList
+{
+    std::vector<Edge*> m_edges;
+
+    // For the sake of the active edge list, we keep track of them 'vertically'
+    // by checking if a point on the second is to the left of a point on the other
+    // line. If this is the case then we know the second one must be 'above' the first
+    // one for its entire distance because there are now intersections
+    static bool activeEdgeLessThan(const Edge* l, const Edge* r)
+    {
+        // First check if one is just wholly above the other
+        double minYL = l->firstPoint()->location.y();
+        double maxYL = l->secondPoint()->location.y();
+        if (minYL > maxYL)
+            std::swap(minYL, maxYL);
+
+        double minYR = r->firstPoint()->location.y();
+        double maxYR = r->secondPoint()->location.y();
+        if (minYR > maxYR)
+            std::swap(minYR, maxYR);
+
+        if (maxYL < minYR)
+            return true;
+        else if (maxYR < minYL)
+            return false;
+
+        // Make unit vectors out of the edges; and check dot products
+        const auto unitL1L2   = unit(geometry::ConstReferringSegment2d(l->firstPoint()->location, l->secondPoint()->location));
+        const auto normalL1L2 = geometry::Point2d {-unitL1L2.y(), unitL1L2.x()};
+        const auto unitL1R1   = unit(geometry::ConstReferringSegment2d(l->firstPoint()->location, r->firstPoint()->location));
+        const auto unitL1R2   = unit(geometry::ConstReferringSegment2d(l->firstPoint()->location, r->secondPoint()->location));
+
+        // TODO: Use different epsilon?
+        if (r->firstPoint() == l->firstPoint() || r->firstPoint() == l->secondPoint() ||
+            std::abs(bg::dot_product(normalL1L2, unitL1R1) - 1) < 0.00001)
+            return bg::dot_product(normalL1L2, unitL1R2) > 0;
+        return bg::dot_product(normalL1L2, unitL1R1) > 0;
+    }
+
+  public:
+    size_t size() const { return m_edges.size(); }
+    size_t insert(Edge* e)
+    {
+        const auto currEdgeInsertIt = std::lower_bound(m_edges.begin(), m_edges.end(), e, &activeEdgeLessThan);
+        const auto activeEdgeIndex  = static_cast<unsigned long>(std::distance(m_edges.begin(), currEdgeInsertIt));
+
+        // Prevent double insertions
+        if (currEdgeInsertIt == m_edges.end() || *currEdgeInsertIt != e)
+            m_edges.insert(currEdgeInsertIt, e);
+
+        return activeEdgeIndex;
+    }
+
+    void removeLessThanEqual(const Edge* e)
+    {
+        // Remove edges that are strictly to the left
+        removeLessThan(e->firstPoint()->location);
+
+        // If this edge isn't a start of loop, then
+        // remove the edge adjacent which is to the left
+        // If that edge is vertical, remove the one before it also,
+        // unless the vertical edge is a start of loop
+        if (e->previousEdge()->secondPoint() == e->firstPoint())
+        {
+            removeSpecific(e->previousEdge());
+            if (e->previousEdge()->isVertical() && e->previousEdge()->previousEdge()->secondPoint() == e->previousEdge()->firstPoint())
+                removeSpecific(e->previousEdge()->previousEdge());
+        }
+        else if (e->nextEdge()->secondPoint() == e->firstPoint())
+        {
+            removeSpecific(e->nextEdge());
+            if (e->nextEdge()->isVertical() && e->nextEdge()->nextEdge()->secondPoint() == e->nextEdge()->firstPoint())
+                removeSpecific(e->nextEdge()->nextEdge());
+        }
+        else if (e->previousEdge()->firstPoint() == e->firstPoint() && e->previousEdge()->isVertical())
+        {
+            removeSpecific(e->previousEdge());
+            if (e->previousEdge()->previousEdge()->secondPoint() == e->previousEdge()->secondPoint())
+                removeSpecific(e->previousEdge()->previousEdge());
+        }
+        else if (e->nextEdge()->firstPoint() == e->firstPoint() && e->nextEdge()->isVertical())
+        {
+            removeSpecific(e->nextEdge());
+            if (e->nextEdge()->nextEdge()->secondPoint() == e->nextEdge()->secondPoint())
+                removeSpecific(e->nextEdge()->nextEdge());
+        }
+    }
+
+    void removeLessThan(const geometry::Point2d& p)
+    {
+        m_edges.erase(
+            std::remove_if(m_edges.begin(), m_edges.end(), [&](const Edge* e) { return (e->secondPoint()->location.x() < p.x()); }),
+            m_edges.end());
+    }
+
+    void removeSpecific(const Edge* e)
+    {
+        const auto targetIt = std::find(m_edges.begin(), m_edges.end(), e);
+        if (targetIt != m_edges.end())
+            m_edges.erase(targetIt);
+    }
+
+    size_t indexOf(const Edge* e)
+    {
+        const auto edgeIt = std::lower_bound(m_edges.begin(), m_edges.end(), e, &activeEdgeLessThan);
+        if (*edgeIt == e)
+            return std::distance(m_edges.begin(), edgeIt);
+        return m_edges.size();
+    }
+
+    Edge* operator[](const size_t index) { return m_edges[index]; }
+};
+
+class VerticalEdgeList
+{
+    std::vector<dcel::half_edge_t*> m_edges;
+
+    static bool verticalEdgeVertexLessThan(const dcel::half_edge_t* e, const dcel::vertex_t* v)
+    {
+        return e->origin->location.x() < v->location.x();
+    }
+
+    static bool vertexVerticalEdgeLessThan(const dcel::vertex_t* v, const dcel::half_edge_t* e)
+    {
+        return v->location.x() < e->origin->location.x();
+    }
+
+    static bool verticalEdgeLessThan(const dcel::half_edge_t* l, const dcel::half_edge_t* r)
+    {
+        return verticalEdgeVertexLessThan(l, r->origin);
+    }
+
+  public:
+    // Should always insert the downward edge
+    void insert(dcel::half_edge_t* edge)
+    {
+        assert(edge && edge->twin && edge->origin && edge->twin->origin);
+        assert(std::abs(edge->origin->location.x() - edge->twin->origin->location.x()) < 0.00001);
+        assert(edge->origin->location.y() >= edge->twin->origin->location.y());
+
+        const auto insertIt = std::lower_bound(m_edges.begin(), m_edges.end(), edge, verticalEdgeLessThan);
+        m_edges.insert(insertIt, edge);
+    }
+
+    dcel::half_edge_t* getEdge(const dcel::vertex_t* v1, const dcel::vertex_t* v2)
+    {
+        auto firstIt      = std::lower_bound(m_edges.begin(), m_edges.end(), v1, verticalEdgeVertexLessThan);
+        const auto lastIt = std::upper_bound(m_edges.begin(), m_edges.end(), v1, vertexVerticalEdgeLessThan);
+
+        for (; firstIt != lastIt; firstIt++)
+        {
+            if (((*firstIt)->origin == v1 && (*firstIt)->twin->origin == v2) ||
+                ((*firstIt)->origin == v2 && (*firstIt)->twin->origin == v1))
+                return *firstIt;
+        }
+
+        return nullptr;
+    }
+};
+
 std::vector<std::unique_ptr<Edge>> buildSortedEdgeList(const geometry::Polygon2d& poly, DoublyConnectedEdgeList& dcel,
                                                        DCELPointFactory& dcelPoints)
 {
-    std::vector<std::unique_ptr<Edge>> edges;
+    typedef std::unique_ptr<Edge> EdgePtr;
+    std::vector<EdgePtr> edges;
 
     //  a. Build list of edges such that
     //      * Every segment's first and second points are sorted
@@ -325,16 +431,18 @@ std::vector<std::unique_ptr<Edge>> buildSortedEdgeList(const geometry::Polygon2d
             // Only care about the first point in the segment, because the next segment
             // with have this segment's second point as its first
             const auto& newEdge = *edges.emplace(edges.end(), new Edge);
-            newEdge->first      = dcelPoints.addOrGetVertex(segment.first, dcel);
+            newEdge->first_     = dcelPoints.addOrGetVertex(segment.first, dcel);
 
             // Create a dcel edge to match this one
             const auto& newDcelEdge = *dcel.edges.emplace(dcel.edges.end(), new dcel::half_edge_t);
-            newDcelEdge->origin     = newEdge->first;
+            newDcelEdge->origin     = newEdge->first_;
 
             newEdge->halfEdge = newDcelEdge.get();
 
-            if (!newEdge->first->edge)
-                newEdge->first->edge = newEdge->halfEdge;
+            if (!newEdge->first_->edge)
+                newEdge->first_->edge = newEdge->halfEdge;
+
+            newEdge->isOuterLoop_ = i == 0;
         });
 
         // Link everything up, and sort the points
@@ -344,18 +452,31 @@ std::vector<std::unique_ptr<Edge>> buildSortedEdgeList(const geometry::Polygon2d
             auto& edge1 = edges[j];
             auto& edge2 = edges[i];
 
-            edge1->next           = edge2.get();
+            edge1->next_          = edge2.get();
             edge1->halfEdge->next = edge2->halfEdge;
 
-            edge2->previous       = edge1.get();
+            edge2->previous_      = edge1.get();
             edge2->halfEdge->prev = edge1->halfEdge;
+
+            if (edge1->isOuterLoop_)
+            {
+                edge1->clockwise_        = edge2.get();
+                edge2->counterclockwise_ = edge1.get();
+            }
+            else
+            {
+                edge1->counterclockwise_ = edge2.get();
+                edge2->clockwise_        = edge1.get();
+            }
 
             // Can't use edge2->second because that might have been swapped
             // around by the std::swap call below
-            edge1->second = edge2->halfEdge->origin;
+            edge1->second_ = edge2->halfEdge->origin;
 
-            if (!vertexLessThan(*edge1->first, *edge1->second))
-                std::swap(edge1->first, edge1->second);
+            if (!vertexLessThan(*edge1->first_, *edge1->second_))
+                std::swap(edge1->first_, edge1->second_);
+
+            edge1->isVertical_ = pointsHaveSameXCoord(edge1->first_, edge1->second_);
         }
     }
 
@@ -363,7 +484,7 @@ std::vector<std::unique_ptr<Edge>> buildSortedEdgeList(const geometry::Polygon2d
     //      Sort by leftmost point, unless they're the same, then sort by other point. Points being the 'same'
     //      can be checked by seeing if they're the same vertex pointer, becuase we merged points that are physically
     //      close to each other in the last step
-    std::sort(edges.begin(), edges.end(), &edgeLessThan);
+    std::sort(edges.begin(), edges.end(), [](const EdgePtr& l, const EdgePtr& r) { return *l < *r; });
 
     return edges;
 }
@@ -386,12 +507,12 @@ dcel::vertex_t* intersection(const geometry::ConstReferringSegment2d e1, const g
 dcel::vertex_t* intersectionAbove(const dcel::vertex_t* v, const Edge* e, DoublyConnectedEdgeList& dcel, DCELPointFactory& dcelPoints)
 {
     // If the edge is vertical, just return the lower point from the edge
-    if (edgeIsVertical(e) && pointsHaveSameXCoord(v, e->first))
-        return e->first;
+    if (e->isVertical() && pointsHaveSameXCoord(v, e->firstPoint()))
+        return e->firstPoint();
 
-    const geometry::Point2d pointAbove(v->location.x(), std::max(e->first->location.y(), e->second->location.y()) + 1);
+    const geometry::Point2d pointAbove(v->location.x(), std::max(e->firstPoint()->location.y(), e->secondPoint()->location.y()) + 1);
     const geometry::ConstReferringSegment2d upwardSegment(v->location, pointAbove);
-    const geometry::ConstReferringSegment2d segmentAbove(e->first->location, e->second->location);
+    const geometry::ConstReferringSegment2d segmentAbove(e->firstPoint()->location, e->secondPoint()->location);
 
     return intersection(upwardSegment, segmentAbove, dcel, dcelPoints);
 }
@@ -399,12 +520,12 @@ dcel::vertex_t* intersectionAbove(const dcel::vertex_t* v, const Edge* e, Doubly
 dcel::vertex_t* intersectionBelow(const dcel::vertex_t* v, const Edge* e, DoublyConnectedEdgeList& dcel, DCELPointFactory& dcelPoints)
 {
     // If the edge is vertical, just return the upper point from the edge
-    if (edgeIsVertical(e) && pointsHaveSameXCoord(v, e->first))
-        return e->second;
+    if (e->isVertical() && pointsHaveSameXCoord(v, e->firstPoint()))
+        return e->secondPoint();
 
-    const geometry::Point2d pointBelow(v->location.x(), std::min(e->first->location.y(), e->second->location.y()) - 1);
+    const geometry::Point2d pointBelow(v->location.x(), std::min(e->firstPoint()->location.y(), e->secondPoint()->location.y()) - 1);
     const geometry::ConstReferringSegment2d downwardSegment(v->location, pointBelow);
-    const geometry::ConstReferringSegment2d segmentBelow(e->first->location, e->second->location);
+    const geometry::ConstReferringSegment2d segmentBelow(e->firstPoint()->location, e->secondPoint()->location);
 
     return intersection(downwardSegment, segmentBelow, dcel, dcelPoints);
 }
@@ -548,7 +669,7 @@ dcel::half_edge_t* upwardEdge(dcel::half_edge_t* edgeFromPointBelow, Edge* edgeA
     // Assume that the intersection happens right on the edge
     // of the segment above
     auto leftOfIntersection  = edgeAbove->halfEdge;
-    auto rightOfIntersection = edgeAbove->next->halfEdge;
+    auto rightOfIntersection = edgeAbove->nextEdge()->halfEdge;
 
     // Check if the intersection happens on the left side
     // of the half edge above
@@ -686,22 +807,23 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
     const auto completeUnfinishedEdges = [&](const dcel::vertex_t& sweepLinePoint) {
         // If the current edge's left-most point further right than the unfinished edge's right point, then
         // we can process the unfinished edge and make a vertical up and down from it
-        while (unfinishedEdges.size() > 0 && vertexLessThan(*unfinishedEdges.next()->second, sweepLinePoint))
+        while (unfinishedEdges.size() > 0 && vertexLessThan(*unfinishedEdges.next()->secondPoint(), sweepLinePoint))
         {
             auto currentEdgePtr = unfinishedEdges.next();
             auto& currentEdge   = *currentEdgePtr;
 
             // Move the sweep line forward to remove any edges that end before the one we're
             // finishing
-            activeEdges.removeLessThan(currentEdge.second->location);
+            activeEdges.removeLessThan(currentEdge.secondPoint()->location);
 
             const auto activeEdgeIndex = activeEdges.indexOf(currentEdgePtr);
 
-            const auto adjacentEdgeAttachedAtSecondPoint =
-                currentEdge.previous->second == currentEdge.second ? currentEdge.previous : currentEdge.next;
+            const auto adjacentEdgeAttachedAtSecondPoint = currentEdge.previousEdge()->secondPoint() == currentEdge.secondPoint()
+                                                               ? currentEdge.previousEdge()
+                                                               : currentEdge.nextEdge();
 
             const bool isBottomEdge = activeEdges.indexOf(adjacentEdgeAttachedAtSecondPoint) > activeEdgeIndex;
-            const bool isVertical   = edgeIsVertical(currentEdgePtr);
+            const bool isVertical   = currentEdgePtr->isVertical();
 
             const auto upperEdgeIndex = isBottomEdge ? activeEdgeIndex + 1 : activeEdgeIndex;
             const auto lowerEdgeIndex = isBottomEdge ? activeEdgeIndex : activeEdgeIndex - 1;
@@ -737,8 +859,8 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
             // down
 
             dcel::half_edge_t* upward;
-            if (isVertical && currentEdge.next->first->location.x() < currentEdge.first->location.x() &&
-                currentEdge.previous->second->location.x() > currentEdge.first->location.x())
+            if (isVertical && currentEdge.nextEdge()->firstPoint()->location.x() < currentEdge.firstPoint()->location.x() &&
+                currentEdge.previousEdge()->secondPoint()->location.x() > currentEdge.firstPoint()->location.x())
             {
                 upward         = upwardEdge(upperDcelEdge, edgeAbove, verticalEdges, dcel, dcelPoints);
                 upward->region = upward->prev->region;
@@ -801,7 +923,7 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
     {
         const auto& currentEdgePtr = *currentEdgeIt;
         auto& currentEdge          = *currentEdgePtr;
-        auto& currentPoint         = currentEdge.first->location;
+        auto& currentPoint         = currentEdge.firstPoint()->location;
 
         //! a. Mark the edge as processed
         //  Assumption: If we used the segment to start a loop below, then
@@ -826,7 +948,7 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
         //  Once we connect to the edges above and below in the active edge list, then
         //  what? Do we remove them and that forms a new polygon? Probably yes.
 
-        completeUnfinishedEdges(*currentEdge.first);
+        completeUnfinishedEdges(*currentEdge.firstPoint());
 
         //! d. Update the active edge list, adding the new edge, and removing any
         //! edges that have gone out of scope
@@ -876,13 +998,13 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
             // because we haven't processed the line directly above the current one
             sweepLineIt++;
 
-            // TODO: Track this iterator over time so it doesn't be an N^2 kind of deal in
-            // stupid cases
-            while (sweepLineIt != edges.end() && std::abs((*sweepLineIt)->first->location.x() - currentPoint.x()) < 0.000001)
+            while (sweepLineIt != edges.end() && std::abs((*sweepLineIt)->firstPoint()->location.x() - currentPoint.x()) < 0.000001)
             {
+                activeEdges.removeLessThanEqual(sweepLineIt->get());
+
                 // But we have to ignore vertical edges in order to preserve the even/odd
                 // invariant of the active edge list
-                if (!edgeIsVertical(sweepLineIt->get()))
+                if (!(**sweepLineIt).isVertical())
                     activeEdges.insert(sweepLineIt->get());
                 sweepLineIt++;
             }
@@ -913,11 +1035,11 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
         //const bool endOfLoop   = processedSegments.count(currentEdge.next) != 0 && processedSegments.count(currentEdge.previous) != 0;
 
         // Finds the 'bottom' edge of all opening loops
-        const bool startOfLoop = std::next(currentEdgeIt) != edges.end() && currentEdge.first == (*std::next(currentEdgeIt))->first;
+        const bool startOfLoop = currentEdge.isLoopStart();
 
         // Finds the 'bottom' edge when the segments are going 'upward'
         // and finds the 'top' edge when the segments are going 'downward'
-        const bool endOfLoop = currentEdge.second == currentEdge.next->second;
+        const bool endOfLoop = currentEdge.isLoopEnd();
 
         if (startOfLoop && currEdgeActiveIndex % 2 == 0)
         {
@@ -926,7 +1048,7 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
             //
             //  Correction: Get the next segment on the boundary; there could be another
             //      one in the sorted list before it
-            Edge* nextEdgePtr = currentEdge.next;
+            Edge* nextEdgePtr = currentEdge.nextEdge();
 
             //! ii. Construct a half-edge for it, storing the new half edge as a duplicate
             //! of the original edge
@@ -1002,14 +1124,14 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
             // If the previous is a vertical segment, go back one more
             // Since we simplified to remove colinear edges, we know that
             // there's no other cases
-            const bool firstEdgeIsVertical = edgeIsVertical(currentEdge.previous);
-            const auto nextEdgePtr         = firstEdgeIsVertical ? currentEdge.previous->previous : currentEdge.previous;
+            const bool firstEdgeIsVertical = currentEdge.previousEdge()->isVertical();
+            const auto nextEdgePtr         = firstEdgeIsVertical ? currentEdge.previousEdge()->previousEdge() : currentEdge.previousEdge();
 
             //! ii. Mark the second edge as processed
             processedSegments.insert(nextEdgePtr);
 
             if (firstEdgeIsVertical)
-                processedSegments.insert(currentEdge.previous);
+                processedSegments.insert(currentEdge.previousEdge());
 
             //! iii. Update the active edge list
             //  Ah yes, let me just do an 'update'
@@ -1159,7 +1281,7 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
     };
 
     dcel::vertex_t rightPlus1;
-    rightPlus1.location = {edges.back()->second->location.x() + 1, edges.back()->second->location.y()};
+    rightPlus1.location = {edges.back()->secondPoint()->location.x() + 1, edges.back()->secondPoint()->location.y()};
 
     // Complete any unfinished edges created in the last step
     completeUnfinishedEdges(rightPlus1);
