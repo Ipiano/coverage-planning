@@ -210,6 +210,7 @@ void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::radian>& shape)
     }
     catch (std::exception& ex)
     {
+        qCritical() << "Exception:" << ex.what();
         m_decomposition = new QGraphicsItemGroup();
         m_scene->addItem(m_decomposition);
     }

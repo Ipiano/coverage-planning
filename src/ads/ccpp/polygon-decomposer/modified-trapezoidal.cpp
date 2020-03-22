@@ -525,6 +525,15 @@ dcel::vertex_t* intersectionAbove(const dcel::vertex_t* v, const Edge* e, Doubly
     if (e->isVertical() && pointsHaveSameXCoord(v, e->firstPoint()))
         return e->firstPoint();
 
+    // Check the endpoints of the edge below
+    // In theory, this isn't necessary and boost should
+    // detect this, but there are cases where it won't
+    if (pointsHaveSameXCoord(v, e->firstPoint()))
+        return e->firstPoint();
+
+    if (pointsHaveSameXCoord(v, e->secondPoint()))
+        return e->secondPoint();
+
     const geometry::Point2d pointAbove(v->location.x(), std::max(e->firstPoint()->location.y(), e->secondPoint()->location.y()) + 1);
     const geometry::ConstReferringSegment2d upwardSegment(v->location, pointAbove);
     const geometry::ConstReferringSegment2d segmentAbove(e->firstPoint()->location, e->secondPoint()->location);
@@ -536,6 +545,15 @@ dcel::vertex_t* intersectionBelow(const dcel::vertex_t* v, const Edge* e, Doubly
 {
     // If the edge is vertical, just return the upper point from the edge
     if (e->isVertical() && pointsHaveSameXCoord(v, e->firstPoint()))
+        return e->secondPoint();
+
+    // Check the endpoints of the edge below
+    // In theory, this isn't necessary and boost should
+    // detect this, but there are cases where it won't
+    if (pointsHaveSameXCoord(v, e->firstPoint()))
+        return e->firstPoint();
+
+    if (pointsHaveSameXCoord(v, e->secondPoint()))
         return e->secondPoint();
 
     const geometry::Point2d pointBelow(v->location.x(), std::min(e->firstPoint()->location.y(), e->secondPoint()->location.y()) - 1);
