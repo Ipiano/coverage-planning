@@ -1145,14 +1145,8 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
         // from ouside the shape to inside, so we create a new
         // region, but do not need to make a vertical line
         // or end other regions
-        //
-        // Since the start of loop edges are always the 'bottom' edge
-        // of the loop, we are guaranteed that this case means the
-        // edge is part of the outer loop
         if (startOfLoop && currEdgeActiveIndex % 2 == 0)
         {
-            assert(currentEdge.isOuterLoop());
-
             //! i. Get the next segment in the sorted input list. This represents the second
             //! edge of the boundary.
             //
@@ -1162,7 +1156,7 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
             //      the inner loop and the outer loop; but we'll handle it in a 'not incorrect'
             //      manner by producing a zero-size region which is connected to an upper and
             //      lower region after it
-            Edge* nextEdgePtr = currentEdge.clockwiseEdge();
+            Edge* nextEdgePtr = currentEdge.firstEdge();
 
             //! ii. Construct a half-edge for it, storing the new half edge as a duplicate
             //! of the original edge
