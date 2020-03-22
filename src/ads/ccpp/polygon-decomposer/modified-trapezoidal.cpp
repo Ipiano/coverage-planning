@@ -150,7 +150,10 @@ struct Edge
     // Always finds the 'bottom' side
     // of a loop start, to guarantee it's
     // found asap
-    bool isLoopStart() const { return !firstEdge()->isVerticalZigZag() && firstPoint() == clockwiseEdge()->firstPoint(); }
+    bool isLoopStart() const
+    {
+        return !isVertical() && !firstEdge()->isVerticalZigZag() && firstPoint() == firstEdge()->firstPoint() && angleLessThan(firstEdge());
+    }
 
     // Not guaranteed to find any
     // particular top or bottom of an
@@ -193,14 +196,14 @@ struct Edge
     // main algorithm loop
     bool hasBeenProcessed_ = false;
 
-    bool angleLessThan(const Edge* other) { return angleLessThan(*other); }
-    bool angleLessThan(const Edge& other) { return unitDotWithHorizontal() < other.unitDotWithHorizontal(); }
+    bool angleLessThan(const Edge* other) const { return angleLessThan(*other); }
+    bool angleLessThan(const Edge& other) const { return unitDotWithHorizontal() < other.unitDotWithHorizontal(); }
 
     // TODO: Not guaranteed to sort correctly when
     // two edges on separate loops have the same first
     // point and same angle
-    bool operator<(const Edge* other) { return operator<(*other); }
-    bool operator<(const Edge& other)
+    bool operator<(const Edge* other) const { return operator<(*other); }
+    bool operator<(const Edge& other) const
     {
         if (firstPoint() == other.firstPoint())
         {
@@ -560,6 +563,32 @@ dcel::half_edge_t* downwardEdge(dcel::half_edge_t* edgeFromPointAbove, Edge* edg
 
     auto pointAbove = edgeFromPointAbove->origin;
 
+    // If there's a zig-zag below and the vertical edge is in-line
+    // with the line we are drawing downwards, then back up a couple steps
+    // to make sure we intersect with the top of that zig-zag
+    if (pointsHaveSameXCoord(pointAbove, edgeBelow->firstPoint()) && edgeBelow->firstEdge()->isVerticalZigZag() &&
+        edgeBelow->firstPoint() == edgeBelow->firstEdge()->firstPoint())
+    {
+        edgeBelow = edgeBelow->firstEdge()->secondEdge();
+    }
+
+    // If the edge below is vertical, then it has to be on the opening
+    // side of a loop; so we'll step along the top of that loop
+    // in order to intersect with the edge attached to the top of that
+    // vertical line
+    if (edgeBelow->isVertical())
+    {
+        assert(!edgeBelow->isVerticalZigZag());
+        assert(edgeBelow->firstPoint() == edgeBelow->firstEdge()->firstPoint());
+
+        edgeBelow = edgeBelow->secondEdge();
+    }
+
+    // Should never have to worry about a zig-zag case where the vertical
+    // edge is attached to the second point of edge above. If that were going
+    // to be the case, updating the active edge list would have removed the edge
+    // above and moved to the right to the other side of the vertical edge
+
     auto intersectionVertex = intersectionBelow(pointAbove, edgeBelow, dcel, dcelPoints);
     auto existingEdge       = verticalEdges.getEdge(pointAbove, intersectionVertex);
     if (existingEdge)
@@ -646,6 +675,32 @@ dcel::half_edge_t* upwardEdge(dcel::half_edge_t* edgeFromPointBelow, Edge* edgeA
     assert(edgeAbove->halfEdge->prev != nullptr);
 
     auto pointBelow = edgeFromPointBelow->origin;
+
+    // If there's a zig-zag above and the vertical edge is in-line
+    // with the line we are drawing upwards, then back up a couple steps
+    // to make sure we intersect with the bottom of that zig-zag
+    if (pointsHaveSameXCoord(pointBelow, edgeAbove->firstPoint()) && edgeAbove->firstEdge()->isVerticalZigZag() &&
+        edgeAbove->firstPoint() == edgeAbove->firstEdge()->secondPoint())
+    {
+        edgeAbove = edgeAbove->firstEdge()->firstEdge();
+    }
+
+    // If the edge above is vertical, then it has to be on the closing
+    // side of a loop; so we'll step along the bottom of that loop
+    // in order to intersect with the edge attached to the bottom of that
+    // vertical line
+    if (edgeAbove->isVertical())
+    {
+        assert(!edgeAbove->isVerticalZigZag());
+        assert(edgeAbove->secondPoint() == edgeAbove->secondEdge()->secondPoint());
+
+        edgeAbove = edgeAbove->firstEdge();
+    }
+
+    // Should never have to worry about a zig-zag case where the vertical
+    // edge is attached to the second point of edge above. If that were going
+    // to be the case, updating the active edge list would have removed the edge
+    // above and moved to the right to the other side of the vertical edge
 
     auto intersectionVertex = intersectionAbove(pointBelow, edgeAbove, dcel, dcelPoints);
     auto existingEdge       = verticalEdges.getEdge(intersectionVertex, pointBelow);
@@ -824,15 +879,24 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
             // Move the sweep line forward to remove any edges that end before the one we're
             // finishing
             activeEdges.removeLessThan(currentEdge.secondPoint()->location);
+            assert((activeEdges.size() % 2) == 0);
 
-            const bool isLowerEdge = currentEdge.secondPoint() == currentEdge.counterClockwiseEdge()->secondPoint();
-            assert(isLowerEdge || currentEdge.secondPoint() == currentEdge.clockwiseEdge()->secondPoint());
+            // Edges that are the end of a loop should always
+            // be in scope when they are finished
+            const auto currentEdgeActiveIndex = activeEdges.indexOf(currentEdgePtr);
+            assert(currentEdgeActiveIndex != -1);
 
-            const auto lowerEdge = isLowerEdge ? currentEdgePtr : currentEdge.clockwiseEdge();
-            const auto upperEdge = isLowerEdge ? currentEdge.counterClockwiseEdge() : currentEdgePtr;
+            // The last edge processed in a loop will always
+            // be attached to the other 'end of loop' segment on the second point
+            const auto adjacentEdgeActiveIndex = activeEdges.indexOf(currentEdge.secondEdge());
+            assert(adjacentEdgeActiveIndex != -1);
 
-            const auto lowerEdgeIndex = activeEdges.indexOf(lowerEdge);
-            const auto upperEdgeIndex = activeEdges.indexOf(upperEdge);
+            const bool isLowerEdge = currentEdgeActiveIndex < adjacentEdgeActiveIndex;
+            const auto lowerEdge   = isLowerEdge ? currentEdgePtr : currentEdge.secondEdge();
+            const auto upperEdge   = isLowerEdge ? currentEdge.secondEdge() : currentEdgePtr;
+
+            const auto lowerEdgeIndex = isLowerEdge ? currentEdgeActiveIndex : adjacentEdgeActiveIndex;
+            const auto upperEdgeIndex = isLowerEdge ? adjacentEdgeActiveIndex : currentEdgeActiveIndex;
 
             // When we finish a loop, both of the last two edges on the
             // loop should still be active
@@ -884,7 +948,17 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
                 // Create new region to be the resulting one after closing the lower and upper regions
                 // for the hole
                 const auto& newDcelRegion = *dcel.regions.emplace(dcel.regions.end(), new dcel::region_t);
+
+                // Need to forward this new region a couple steps down the line
+                // because it's possible that we processed the edges before creating
+                // this vertical break
                 downward->twin->region = downward->twin->prev->region = newDcelRegion.get();
+
+                // If we connected directly to a vertical edge below us, we need to
+                // forward the region one more step because the edge below the vertical edge
+                // below the current point will have already been processed by this point
+                if (pointsHaveSameXCoord(downward->twin->origin, downward->twin->prev->origin))
+                    downward->twin->prev->prev->region = newDcelRegion.get();
 
                 newDcelRegion->edge = downward->twin;
                 downward->region    = downward->next->region;
@@ -1145,6 +1219,12 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
             //  That doesn't make sense unless we're re-using the sorted input as part of the DCEL output.
             //
             //  Done above
+
+            // It's possible for this edge to be both a loop start and loop end,
+            // but due to the order of edge processing, it's never realized as a
+            // loop end. We check for that situation here
+            if (!currentEdge.secondEdge()->isVertical() && currentEdge.secondEdge()->secondPoint() == currentEdge.secondPoint())
+                unfinishedEdges.insert(currentEdgePtr.get());
         }
 
         //! f. Else, if neither the previous nor the next edge along the boundary has been processed yet,
