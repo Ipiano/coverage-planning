@@ -13,8 +13,14 @@ namespace polygon_decomposer
 
 class ModifiedTrapezoidal : public interfaces::PolygonDecomposerIf
 {
+    const ccpp::quantity::Degrees m_angleTolerance;
+
   public:
-    ModifiedTrapezoidal();
+    /*!
+     * \brief Constructs a decomposer for the modified trapezoidal decomposition
+     * \param angleTolerance Max # of degrees between adjacent edges before a region is split
+     */
+    ModifiedTrapezoidal(const ccpp::quantity::Degrees angleTolerance = ccpp::units::Degree * 361);
 
     DoublyConnectedEdgeList decomposePolygon(const geometry::Polygon2d& poly) const override;
 };

@@ -76,6 +76,26 @@
        </spacer>
       </item>
       <item>
+       <widget class="QLabel" name="label">
+        <property name="text">
+         <string>Tolerance (Degrees)</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QSpinBox" name="spinBox_tolerance">
+        <property name="maximum">
+         <number>361</number>
+        </property>
+        <property name="value">
+         <number>361</number>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="QCheckBox" name="checkBox_rotate">
         <property name="text">
          <string>Rotate To

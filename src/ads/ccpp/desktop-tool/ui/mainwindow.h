@@ -38,6 +38,7 @@ class MainWindow : public QMainWindow
     QGraphicsItem* m_decomposition   = nullptr;
 
     QString m_defaultFilePath = QDir::homePath();
+    geometry::GeoPolygon2d<boost::geometry::radian> m_currentShape;
 
     std::unique_ptr<Ui::MainWindow> m_ui;
 
@@ -47,10 +48,13 @@ class MainWindow : public QMainWindow
     explicit MainWindow(const QVector<std::shared_ptr<ImportShapeInterfaceFactory>>& shapeImporters = {}, QWidget* parent = nullptr);
     ~MainWindow();
 
+    void resizeEvent(QResizeEvent* event) override;
+
   private slots:
     void loadFile();
     void loadShape(const geometry::GeoPolygon2d<boost::geometry::radian>& shape);
     void updateView();
+    void recalculate();
 };
 }
 }

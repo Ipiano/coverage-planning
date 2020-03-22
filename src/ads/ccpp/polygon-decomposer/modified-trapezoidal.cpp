@@ -519,93 +519,58 @@ dcel::vertex_t* intersection(const geometry::ConstReferringSegment2d e1, const g
     return intersectionVertex;
 }
 
-dcel::vertex_t* intersectionAbove(const dcel::vertex_t* v, const Edge* e, DoublyConnectedEdgeList& dcel, DCELPointFactory& dcelPoints)
+dcel::vertex_t* intersectionAbove(const dcel::vertex_t* v, const dcel::half_edge_t* e, DoublyConnectedEdgeList& dcel,
+                                  DCELPointFactory& dcelPoints)
 {
     // If the edge is vertical, just return the lower point from the edge
-    if (e->isVertical() && pointsHaveSameXCoord(v, e->firstPoint()))
-        return e->firstPoint();
+    if (pointsHaveSameXCoord(e->origin, e->next->origin) && pointsHaveSameXCoord(v, e->origin))
+        return e->origin->location.y() < e->next->origin->location.y() ? e->origin : e->next->origin;
 
     // Check the endpoints of the edge below
     // In theory, this isn't necessary and boost should
     // detect this, but there are cases where it won't
-    if (pointsHaveSameXCoord(v, e->firstPoint()))
-        return e->firstPoint();
+    if (pointsHaveSameXCoord(v, e->origin))
+        return e->origin;
 
-    if (pointsHaveSameXCoord(v, e->secondPoint()))
-        return e->secondPoint();
+    if (pointsHaveSameXCoord(v, e->next->origin))
+        return e->next->origin;
 
-    const geometry::Point2d pointAbove(v->location.x(), std::max(e->firstPoint()->location.y(), e->secondPoint()->location.y()) + 1);
+    const geometry::Point2d pointAbove(v->location.x(), std::max(e->origin->location.y(), e->next->origin->location.y()) + 1);
     const geometry::ConstReferringSegment2d upwardSegment(v->location, pointAbove);
-    const geometry::ConstReferringSegment2d segmentAbove(e->firstPoint()->location, e->secondPoint()->location);
+    const geometry::ConstReferringSegment2d segmentAbove(e->origin->location, e->next->origin->location);
 
     return intersection(upwardSegment, segmentAbove, dcel, dcelPoints);
 }
 
-dcel::vertex_t* intersectionBelow(const dcel::vertex_t* v, const Edge* e, DoublyConnectedEdgeList& dcel, DCELPointFactory& dcelPoints)
+dcel::vertex_t* intersectionBelow(const dcel::vertex_t* v, const dcel::half_edge_t* e, DoublyConnectedEdgeList& dcel,
+                                  DCELPointFactory& dcelPoints)
 {
     // If the edge is vertical, just return the upper point from the edge
-    if (e->isVertical() && pointsHaveSameXCoord(v, e->firstPoint()))
-        return e->secondPoint();
+    if (pointsHaveSameXCoord(e->origin, e->next->origin) && pointsHaveSameXCoord(v, e->origin))
+        return e->origin->location.y() > e->next->origin->location.y() ? e->origin : e->next->origin;
 
     // Check the endpoints of the edge below
     // In theory, this isn't necessary and boost should
     // detect this, but there are cases where it won't
-    if (pointsHaveSameXCoord(v, e->firstPoint()))
-        return e->firstPoint();
+    if (pointsHaveSameXCoord(v, e->origin))
+        return e->origin;
 
-    if (pointsHaveSameXCoord(v, e->secondPoint()))
-        return e->secondPoint();
+    if (pointsHaveSameXCoord(v, e->next->origin))
+        return e->next->origin;
 
-    const geometry::Point2d pointBelow(v->location.x(), std::min(e->firstPoint()->location.y(), e->secondPoint()->location.y()) - 1);
+    const geometry::Point2d pointBelow(v->location.x(), std::min(e->origin->location.y(), e->next->origin->location.y()) - 1);
     const geometry::ConstReferringSegment2d downwardSegment(v->location, pointBelow);
-    const geometry::ConstReferringSegment2d segmentBelow(e->firstPoint()->location, e->secondPoint()->location);
+    const geometry::ConstReferringSegment2d segmentBelow(e->origin->location, e->next->origin->location);
 
     return intersection(downwardSegment, segmentBelow, dcel, dcelPoints);
 }
 
 // Creates a downward edge from a point to the edge below it
 // If such an edge already exists, it is just returned
-dcel::half_edge_t* downwardEdge(dcel::half_edge_t* edgeFromPointAbove, Edge* edgeBelow, VerticalEdgeList& verticalEdges,
+dcel::half_edge_t* downwardEdge(dcel::half_edge_t* edgeFromPointAbove, dcel::half_edge_t* edgeBelow, VerticalEdgeList& verticalEdges,
                                 DoublyConnectedEdgeList& dcel, DCELPointFactory& dcelPoints)
 {
-    // TODO: Maybe check if x coordinates are sufficiently close to
-    // be considered the same, need to see if bg::intersection sometimes fails
-    // when this is the case. Ideally not
-
-    // The edge below should have a half edge which goes
-    // clockwise on the end result region, so we will split it apart
-    // if the intersection is not where it ends
-    // and point it to the twin half edge coming back up
-    assert(edgeBelow->halfEdge != nullptr);
-    assert(edgeBelow->halfEdge->next != nullptr);
-
     auto pointAbove = edgeFromPointAbove->origin;
-
-    // If there's a zig-zag below and the vertical edge is in-line
-    // with the line we are drawing downwards, then back up a couple steps
-    // to make sure we intersect with the top of that zig-zag
-    if (pointsHaveSameXCoord(pointAbove, edgeBelow->firstPoint()) && edgeBelow->firstEdge()->isVerticalZigZag() &&
-        edgeBelow->firstPoint() == edgeBelow->firstEdge()->firstPoint())
-    {
-        edgeBelow = edgeBelow->firstEdge()->secondEdge();
-    }
-
-    // If the edge below is vertical, then it has to be on the opening
-    // side of a loop; so we'll step along the top of that loop
-    // in order to intersect with the edge attached to the top of that
-    // vertical line
-    if (edgeBelow->isVertical())
-    {
-        assert(!edgeBelow->isVerticalZigZag());
-        assert(edgeBelow->firstPoint() == edgeBelow->firstEdge()->firstPoint());
-
-        edgeBelow = edgeBelow->secondEdge();
-    }
-
-    // Should never have to worry about a zig-zag case where the vertical
-    // edge is attached to the second point of edge above. If that were going
-    // to be the case, updating the active edge list would have removed the edge
-    // above and moved to the right to the other side of the vertical edge
 
     auto intersectionVertex = intersectionBelow(pointAbove, edgeBelow, dcel, dcelPoints);
     auto existingEdge       = verticalEdges.getEdge(pointAbove, intersectionVertex);
@@ -619,8 +584,8 @@ dcel::half_edge_t* downwardEdge(dcel::half_edge_t* edgeFromPointAbove, Edge* edg
 
     // Assume that the intersection happens right on the edge
     // of the segment below
-    auto leftOfIntersection  = edgeBelow->halfEdge->next;
-    auto rightOfIntersection = edgeBelow->halfEdge;
+    auto leftOfIntersection  = edgeBelow->next;
+    auto rightOfIntersection = edgeBelow;
 
     // Create the twin edges for that vertical line
     const auto& downwardHalfEdge = *dcel.edges.emplace(dcel.edges.end(), new dcel::half_edge_t);
@@ -637,9 +602,6 @@ dcel::half_edge_t* downwardEdge(dcel::half_edge_t* edgeFromPointAbove, Edge* edg
 
     upwardHalfEdge->next     = edgeFromPointAbove;
     edgeFromPointAbove->prev = upwardHalfEdge.get();
-
-    //upwardHalfEdge->region   = upwardHalfEdge->next->region;
-    //downwardHalfEdge->region = downwardHalfEdge->prev->region;
 
     // Check if the intersection happens on the right side
     // of the half edge below
@@ -676,15 +638,133 @@ dcel::half_edge_t* downwardEdge(dcel::half_edge_t* edgeFromPointAbove, Edge* edg
     return downwardHalfEdge.get();
 };
 
-// Creates a downward edge from a point to the edge below it
+dcel::half_edge_t* downwardEdge(dcel::half_edge_t* edgeFromPointAbove, Edge* edgeBelow, VerticalEdgeList& verticalEdges,
+                                DoublyConnectedEdgeList& dcel, DCELPointFactory& dcelPoints)
+{
+    // The edge below should have a half edge which goes
+    // clockwise on the end result region, so we will split it apart
+    // if the intersection is not where it ends
+    // and point it to the twin half edge coming back up
+    assert(edgeBelow->halfEdge != nullptr);
+    assert(edgeBelow->halfEdge->next != nullptr);
+
+    auto pointAbove = edgeFromPointAbove->origin;
+
+    // If there's a zig-zag below and the vertical edge is in-line
+    // with the line we are drawing downwards, then back up a couple steps
+    // to make sure we intersect with the top of that zig-zag
+    if (pointsHaveSameXCoord(pointAbove, edgeBelow->firstPoint()) && edgeBelow->firstEdge()->isVerticalZigZag() &&
+        edgeBelow->firstPoint() == edgeBelow->firstEdge()->firstPoint())
+    {
+        edgeBelow = edgeBelow->firstEdge()->secondEdge();
+    }
+
+    // If the edge below is vertical, then it has to be on the opening
+    // side of a loop; so we'll step along the top of that loop
+    // in order to intersect with the edge attached to the top of that
+    // vertical line
+    if (edgeBelow->isVertical())
+    {
+        assert(!edgeBelow->isVerticalZigZag());
+        assert(edgeBelow->firstPoint() == edgeBelow->firstEdge()->firstPoint());
+
+        edgeBelow = edgeBelow->secondEdge();
+    }
+
+    // Should never have to worry about a zig-zag case where the vertical
+    // edge is attached to the second point of edge above. If that were going
+    // to be the case, updating the active edge list would have removed the edge
+    // above and moved to the right to the other side of the vertical edge
+
+    return downwardEdge(edgeFromPointAbove, edgeBelow->halfEdge, verticalEdges, dcel, dcelPoints);
+}
+
+// Creates an upward edge from a point to the edge above it
 // If such an edge already exists, it is just returned
+dcel::half_edge_t* upwardEdge(dcel::half_edge_t* edgeFromPointBelow, dcel::half_edge_t*& edgeAbove, VerticalEdgeList& verticalEdges,
+                              DoublyConnectedEdgeList& dcel, DCELPointFactory& dcelPoints)
+{
+    auto pointBelow = edgeFromPointBelow->origin;
+
+    auto intersectionVertex = intersectionAbove(pointBelow, edgeAbove, dcel, dcelPoints);
+    auto existingEdge       = verticalEdges.getEdge(intersectionVertex, pointBelow);
+
+    // Edges in vertical edge list are downward, but we need it's twin going upward
+    if (existingEdge)
+        return existingEdge->twin;
+
+    // Ensures that the emplace() calls following do not result
+    // in a re-allocation of the vector; therefore the references
+    // returned will stay valid
+    dcel.edges.reserve(dcel.edges.size() + 3);
+
+    // Create the twin edges for that vertical line
+    const auto& downwardHalfEdge = *dcel.edges.emplace(dcel.edges.end(), new dcel::half_edge_t);
+    const auto& upwardHalfEdge   = *dcel.edges.emplace(dcel.edges.end(), new dcel::half_edge_t);
+
+    downwardHalfEdge->twin = upwardHalfEdge.get();
+    upwardHalfEdge->twin   = downwardHalfEdge.get();
+
+    downwardHalfEdge->origin = intersectionVertex;
+    upwardHalfEdge->origin   = pointBelow;
+
+    upwardHalfEdge->prev           = edgeFromPointBelow->prev;
+    edgeFromPointBelow->prev->next = upwardHalfEdge.get();
+
+    downwardHalfEdge->next   = edgeFromPointBelow;
+    edgeFromPointBelow->prev = downwardHalfEdge.get();
+
+    upwardHalfEdge->region   = upwardHalfEdge->prev->region;
+    downwardHalfEdge->region = downwardHalfEdge->next->region;
+
+    // Assume that the intersection happens right on the edge
+    // of the segment above
+    auto leftOfIntersection  = edgeAbove;
+    auto rightOfIntersection = edgeAbove->next;
+
+    // Check if the intersection happens on the left side
+    // of the half edge above
+    if (leftOfIntersection->origin == intersectionVertex)
+    {
+        rightOfIntersection = leftOfIntersection;
+        leftOfIntersection  = leftOfIntersection->prev;
+    }
+    // Otherwise, if it doesn't happen on the left side, it must happen
+    // in the middle, and we have to split it
+    else if (rightOfIntersection->origin != intersectionVertex)
+    {
+        const auto& newRightOfIntersection = *dcel.edges.emplace(dcel.edges.end(), new dcel::half_edge_t);
+
+        newRightOfIntersection->next = rightOfIntersection;
+        rightOfIntersection->prev    = newRightOfIntersection.get();
+
+        newRightOfIntersection->origin = intersectionVertex;
+        newRightOfIntersection->region = rightOfIntersection->region;
+
+        rightOfIntersection = newRightOfIntersection.get();
+
+        intersectionVertex->edge = newRightOfIntersection.get();
+
+        // Reassign the half edge that the Edge tracks so that
+        // if it's used for a later intersection, the correct
+        // region/edges are linked
+        edgeAbove = newRightOfIntersection.get();
+    }
+
+    leftOfIntersection->next = downwardHalfEdge.get();
+    downwardHalfEdge->prev   = leftOfIntersection;
+
+    rightOfIntersection->prev = upwardHalfEdge.get();
+    upwardHalfEdge->next      = rightOfIntersection;
+
+    verticalEdges.insert(downwardHalfEdge.get());
+
+    return upwardHalfEdge.get();
+};
+
 dcel::half_edge_t* upwardEdge(dcel::half_edge_t* edgeFromPointBelow, Edge* edgeAbove, VerticalEdgeList& verticalEdges,
                               DoublyConnectedEdgeList& dcel, DCELPointFactory& dcelPoints)
 {
-    // TODO: Maybe check if x coordinates are sufficiently close to
-    // be considered the same, need to see if bg::intersection sometimes fails
-    // when this is the case. Ideally not
-
     // The edge above should have a half edge which goes
     // clockwise on its region, so we will split it apart
     // if the intersection is not where it ends
@@ -720,81 +800,8 @@ dcel::half_edge_t* upwardEdge(dcel::half_edge_t* edgeFromPointBelow, Edge* edgeA
     // to be the case, updating the active edge list would have removed the edge
     // above and moved to the right to the other side of the vertical edge
 
-    auto intersectionVertex = intersectionAbove(pointBelow, edgeAbove, dcel, dcelPoints);
-    auto existingEdge       = verticalEdges.getEdge(intersectionVertex, pointBelow);
-
-    // Edges in vertical edge list are downward, but we need it's twin going upward
-    if (existingEdge)
-        return existingEdge->twin;
-
-    // Ensures that the emplace() calls following do not result
-    // in a re-allocation of the vector; therefore the references
-    // returned will stay valid
-    dcel.edges.reserve(dcel.edges.size() + 3);
-
-    // Create the twin edges for that vertical line
-    const auto& downwardHalfEdge = *dcel.edges.emplace(dcel.edges.end(), new dcel::half_edge_t);
-    const auto& upwardHalfEdge   = *dcel.edges.emplace(dcel.edges.end(), new dcel::half_edge_t);
-
-    downwardHalfEdge->twin = upwardHalfEdge.get();
-    upwardHalfEdge->twin   = downwardHalfEdge.get();
-
-    downwardHalfEdge->origin = intersectionVertex;
-    upwardHalfEdge->origin   = pointBelow;
-
-    upwardHalfEdge->prev           = edgeFromPointBelow->prev;
-    edgeFromPointBelow->prev->next = upwardHalfEdge.get();
-
-    downwardHalfEdge->next   = edgeFromPointBelow;
-    edgeFromPointBelow->prev = downwardHalfEdge.get();
-
-    upwardHalfEdge->region   = upwardHalfEdge->prev->region;
-    downwardHalfEdge->region = downwardHalfEdge->next->region;
-
-    // Assume that the intersection happens right on the edge
-    // of the segment above
-    auto leftOfIntersection  = edgeAbove->halfEdge;
-    auto rightOfIntersection = edgeAbove->nextEdge()->halfEdge;
-
-    // Check if the intersection happens on the left side
-    // of the half edge above
-    if (leftOfIntersection->origin == intersectionVertex)
-    {
-        rightOfIntersection = leftOfIntersection;
-        leftOfIntersection  = leftOfIntersection->prev;
-    }
-    // Otherwise, if it doesn't happen on the left side, it must happen
-    // in the middle, and we have to split it
-    else if (rightOfIntersection->origin != intersectionVertex)
-    {
-        const auto& newRightOfIntersection = *dcel.edges.emplace(dcel.edges.end(), new dcel::half_edge_t);
-
-        newRightOfIntersection->next = rightOfIntersection;
-        rightOfIntersection->prev    = newRightOfIntersection.get();
-
-        newRightOfIntersection->origin = intersectionVertex;
-        newRightOfIntersection->region = rightOfIntersection->region;
-
-        rightOfIntersection = newRightOfIntersection.get();
-
-        intersectionVertex->edge = newRightOfIntersection.get();
-
-        // Reassign the half edge that the Edge tracks so that
-        // if it's used for a later intersection, the correct
-        // region/edges are linked
-        edgeAbove->halfEdge = newRightOfIntersection.get();
-    }
-
-    leftOfIntersection->next = downwardHalfEdge.get();
-    downwardHalfEdge->prev   = leftOfIntersection;
-
-    rightOfIntersection->prev = upwardHalfEdge.get();
-    upwardHalfEdge->next      = rightOfIntersection;
-
-    verticalEdges.insert(downwardHalfEdge.get());
-
-    return upwardHalfEdge.get();
-};
+    return upwardEdge(edgeFromPointBelow, edgeAbove->halfEdge, verticalEdges, dcel, dcelPoints);
+}
 
 /*!
  * Executes the modified trapezoidal decomposition algorithm outlined
@@ -816,7 +823,7 @@ dcel::half_edge_t* upwardEdge(dcel::half_edge_t* edgeFromPointBelow, Edge* edgeA
  * Current limitations of implementation:
  * * Cannot handle a polygon which does not satisfy boost::geometry::is_valid()
  */
-DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
+DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly, DCELPointFactory& dcelPoints)
 {
     geometry::Polygon2d poly;
 
@@ -827,15 +834,8 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
     if (!bg::is_valid(poly))
         throw std::invalid_argument("boost::geometry::is_valid() failed");
 
-    // TODO: Make EPSILON not be a magic number
-    constexpr double EPSILON = 0.00001;
-
     //  This will be the final result
     DoublyConnectedEdgeList dcel;
-
-    // Manager for points to make sure the same pointer is used
-    // for points that are spatially the same
-    DCELPointFactory dcelPoints(EPSILON);
 
     //  0. Convert the polygon to a sorted edge list
     //     edges will point to the vertices in the dcel
@@ -884,7 +884,7 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
     //
     //  How does this work when there's multiple open regions that didn't start
     //  at the same place? Do we just cut a vertical through them all?
-    double lastVerticalXCoord = std::numeric_limits<double>::lowest();
+    // double lastVerticalXCoord = std::numeric_limits<double>::lowest();
 
     const auto completeUnfinishedEdges = [&](const dcel::vertex_t& sweepLinePoint) {
         // If the current edge's left-most point further right than the unfinished edge's right point, then
@@ -1010,7 +1010,7 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
     {
         const auto& currentEdgePtr = *currentEdgeIt;
         auto& currentEdge          = *currentEdgePtr;
-        auto& currentPoint         = currentEdge.firstPoint()->location;
+        // auto& currentPoint         = currentEdge.firstPoint()->location;
 
         //! a. Mark the edge as processed
         //  Assumption: If we used the segment to start a loop below, then
@@ -1447,13 +1447,144 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly)
     return dcel;
 }
 
-ModifiedTrapezoidal::ModifiedTrapezoidal()
+ccpp::quantity::Degrees angleDifference(const dcel::vertex_t* left, const dcel::vertex_t* mid, const dcel::vertex_t* right)
+{
+    auto p12 = mid->location;
+    auto p23 = right->location;
+
+    bg::subtract_point(p12, left->location);
+    bg::subtract_point(p23, mid->location);
+
+    const auto angle1 = atan2(p12.y(), p12.x());
+    const auto angle2 = atan2(p23.y(), p23.x());
+
+    const auto angleDiff = std::abs(angle1 - angle2);
+    auto degreesDiff     = static_cast<quantity::Degrees>(units::Radian * angleDiff);
+
+    return degreesDiff;
+}
+
+void splitRegion(const dcel::region_t* region, const ccpp::quantity::Degrees angleTolerance, DoublyConnectedEdgeList& dcel,
+                 DCELPointFactory& dcelPoints)
+{
+    // TODO maybe: Make this not necessary here
+    VerticalEdgeList verticalEdges;
+
+    // Important! Due to the way regions are created above, the
+    // first edge in the region will always be the edge going upwards
+    // away from one of the left-most points in the region
+    dcel::half_edge_t *top, *bottom;
+
+    // If the starting edge of the region is vertical,
+    // move away until the top and bottom are not on that
+    // vertical side
+    top = region->edge;
+    while (pointsHaveSameXCoord(top->origin, top->next->origin))
+    {
+        top = top->next;
+
+        // Check for degenerate case: region is just a vertical edge
+        // TODO: Get rid of these, maybe?
+        if (top == region->edge)
+            return;
+    }
+
+    bottom = region->edge->prev;
+    while (pointsHaveSameXCoord(bottom->origin, bottom->next->origin))
+        bottom = bottom->prev;
+
+    // Make one loop around the region to get the
+    // rightmost coordinate
+    double maxXCoord = top->origin->location.x();
+    auto curr        = top;
+    do
+    {
+        if (curr->origin->location.x() >= maxXCoord)
+            maxXCoord = curr->origin->location.x();
+        else
+            break;
+        curr = curr->next;
+    } while (curr != top);
+
+    maxXCoord -= 0.000001;
+
+    // Poor man's sweep line; since all edges
+    // are guaranteed to be vertical or go to the right
+    // we can do this
+    while (top->next->origin->location.x() < maxXCoord || bottom->origin->location.x() < maxXCoord)
+    {
+        // Move the top forward
+        while (top->next->origin->location.x() < maxXCoord && top->next->origin->location.x() <= bottom->origin->location.x())
+        {
+            if (angleDifference(top->origin, top->next->origin, top->next->next->origin) >= angleTolerance)
+            {
+                auto downward = downwardEdge(top->next, bottom, verticalEdges, dcel, dcelPoints);
+                auto upward   = downward->twin;
+
+                auto& newRegion = *dcel.regions.emplace(dcel.regions.end(), new dcel::region_t);
+                newRegion->edge = upward;
+                upward->region  = newRegion.get();
+
+                top    = upward->next;
+                bottom = upward->prev;
+
+                top->region = bottom->region = upward->region;
+            }
+            else
+            {
+                top->region = top->prev->region;
+                top         = top->next;
+            }
+        }
+
+        // Move the bottom forward
+        while (bottom->origin->location.x() < maxXCoord && bottom->origin->location.x() <= top->next->origin->location.x())
+        {
+            if (angleDifference(bottom->next->origin, bottom->origin, bottom->prev->origin) >= angleTolerance)
+            {
+                auto upward = upwardEdge(bottom, top, verticalEdges, dcel, dcelPoints);
+
+                auto& newRegion = *dcel.regions.emplace(dcel.regions.end(), new dcel::region_t);
+                upward->region  = newRegion.get();
+                newRegion->edge = upward;
+
+                top    = upward->next;
+                bottom = upward->prev;
+
+                top->region = bottom->region = upward->region;
+            }
+            else
+            {
+                bottom->region = bottom->next->region;
+                bottom         = bottom->prev;
+            }
+        }
+    }
+}
+
+void splitRegions(DoublyConnectedEdgeList& dcel, DCELPointFactory& dcelPoints, const ccpp::quantity::Degrees angleTolerance)
+{
+    const size_t regionCount = dcel.regions.size();
+    for (size_t i = 0; i < regionCount; i++)
+    {
+        splitRegion(dcel.regions[i].get(), angleTolerance, dcel, dcelPoints);
+    }
+}
+
+ModifiedTrapezoidal::ModifiedTrapezoidal(const ccpp::quantity::Degrees angleTolerance) : m_angleTolerance(angleTolerance)
 {
 }
 
 DoublyConnectedEdgeList ModifiedTrapezoidal::decomposePolygon(const geometry::Polygon2d& poly) const
 {
-    return decompose(poly);
+    // TODO: Make EPSILON not be a magic number
+    constexpr double EPSILON = 0.00001;
+    DCELPointFactory dcelPoints(EPSILON);
+
+    auto dcel = decompose(poly, dcelPoints);
+    splitRegions(dcel, dcelPoints, m_angleTolerance);
+
+    return dcel;
 }
 }
 }

@@ -65,6 +65,8 @@ MainWindow::MainWindow(const QVector<std::shared_ptr<ImportShapeInterfaceFactory
     connect(m_ui->checkBox_rotate, &QCheckBox::clicked, this, &MainWindow::updateView);
     connect(m_ui->checkBox_decomposition, &QCheckBox::clicked, this, &MainWindow::updateView);
 
+    connect(m_ui->spinBox_tolerance, static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), this, &MainWindow::recalculate);
+
     m_defaultFilePath = "/home/ipiano/Documents/Code/MastersProject/test-files";
 
     for (const auto& importer : shapeImporters)
@@ -116,6 +118,7 @@ void MainWindow::loadFile()
     const QString selectedFilter = dialog.selectedNameFilter();
 
     m_defaultFilePath = chosen.dir().path();
+    m_currentShape.clear();
 
     const auto maybeShape = m_importers.value(selectedFilter)->importShape(chosen);
     if (!maybeShape.first)
@@ -126,7 +129,16 @@ void MainWindow::loadFile()
     else
     {
         m_ui->label_fileName->setText("Loaded File: " + chosen.filePath());
+        m_currentShape = maybeShape.second;
         loadShape(maybeShape.second);
+    }
+}
+
+void MainWindow::recalculate()
+{
+    if (m_currentShape.outer().size() > 0)
+    {
+        loadShape(m_currentShape);
     }
 }
 
@@ -151,6 +163,11 @@ void MainWindow::updateView()
 
     m_ui->graphicsView->setTransform(transform);
     m_ui->graphicsView->fitInView(m_scene->itemsBoundingRect(), Qt::AspectRatioMode::KeepAspectRatio);
+}
+
+void MainWindow::resizeEvent(QResizeEvent*)
+{
+    updateView();
 }
 
 void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::radian>& shape)
@@ -192,7 +209,8 @@ void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::radian>& shape)
 
     try
     {
-        ccpp::polygon_decomposer::ModifiedTrapezoidal decomposer;
+        const auto tolerance = m_ui->spinBox_tolerance->value() * units::Degree;
+        ccpp::polygon_decomposer::ModifiedTrapezoidal decomposer(tolerance);
         const auto dcel = decomposer.decomposePolygon(adjustedShapeXY);
 
         //Rotate back to original orientation
