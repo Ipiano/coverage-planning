@@ -14,15 +14,17 @@ HEADERS += \
     $$CCPP_ROOT/interfaces/initial-cost-calculator-if.h \
     $$CCPP_ROOT/interfaces/turn-cost-calculator-if.h \
     $$CCPP_ROOT/interfaces/optimal-direction-calculator-if.h \
+    $$CCPP_ROOT/interfaces/region-merger-if.h \
     \
     $$CCPP_ROOT/polygon-decomposer/modified-trapezoidal.h \
     $$CCPP_ROOT/initial-cost/min-across-angles.hpp \
     $$CCPP_ROOT/turn-cost/u-shaped.h \
-    $$CCPP_ROOT/optimal-direction/min-across-angles.h
+    $$CCPP_ROOT/optimal-direction/min-across-angles.h \
+    $$CCPP_ROOT/region-merger/region-merger.h
 
 
 SOURCES += \
     $$CCPP_ROOT/optimal-direction/min-across-angles.cpp \
-    \
     $$CCPP_ROOT/turn-cost/u-shaped.cpp \
-    $$CCPP_ROOT/polygon-decomposer/modified-trapezoidal.cpp
+    $$CCPP_ROOT/polygon-decomposer/modified-trapezoidal.cpp \
+    $$CCPP_ROOT/region-merger/region-merger.cpp
