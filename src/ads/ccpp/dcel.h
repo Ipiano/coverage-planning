@@ -36,7 +36,6 @@ struct half_edge_t
     vertex_t* origin  = nullptr;
     region_t* region  = nullptr;
 };
-}
 
 struct DoublyConnectedEdgeList
 {
@@ -44,5 +43,31 @@ struct DoublyConnectedEdgeList
     std::vector<std::unique_ptr<dcel::half_edge_t>> edges;
     std::vector<std::unique_ptr<dcel::vertex_t>> vertices;
 };
+
+// Mimics boost::geometry::for_each_segment
+template <class Functor> Functor for_each_segment(const dcel::region_t& region, Functor f)
+{
+    auto it = region.edge;
+
+    do
+    {
+        const geometry::ConstReferringSegment2d segment(it->origin->location, it->next->origin->location);
+        f(segment);
+    } while (it != region.edge);
+
+    return f;
+}
+
+template <class Functor> Functor for_each_segment(const DoublyConnectedEdgeList& dcel, Functor f)
+{
+    for (const auto& regionPtr : dcel.regions)
+        f = for_each_segment(*regionPtr, f);
+
+    return f;
+}
+}
+
+typedef dcel::DoublyConnectedEdgeList DoublyConnectedEdgeList;
+
 }
 }

@@ -16,17 +16,9 @@ class TurnCostCalculatorIf
 
     // Wrappers for all segment types because you can't do virtual inheritance on template functions
     // and this library isn't using duck-typing
-    double calculateTurnCost(const geometry::ReferringSegment2d& edge, const quantity::Radians swathDir) const
+    template <class SegmentT> double calculateTurnCost(const SegmentT& edge, const quantity::Radians swathDir) const
     {
         return _calculateTurnCost(geometry::ConstReferringSegment2d(edge.first, edge.second), swathDir);
-    }
-    double calculateTurnCost(const geometry::Segment2d& edge, const quantity::Radians swathDir) const
-    {
-        return _calculateTurnCost(geometry::ConstReferringSegment2d(edge.first, edge.second), swathDir);
-    }
-    double calculateTurnCost(const geometry::ConstReferringSegment2d& edge, const quantity::Radians swathDir) const
-    {
-        return _calculateTurnCost(edge, swathDir);
     }
 
   protected:

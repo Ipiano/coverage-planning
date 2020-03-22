@@ -18,19 +18,10 @@ namespace initial_cost
 
 class MinAcrossAngles
 {
-    quantity::Radians m_increment;
     const interfaces::OptimalDirectionCalculatorIf& m_directionCalculator;
 
   public:
-    MinAcrossAngles(const interfaces::OptimalDirectionCalculatorIf& dirCalculator, const quantity::Radians increment)
-        : m_increment(increment), m_directionCalculator(dirCalculator)
-    {
-    }
-
-    MinAcrossAngles(const interfaces::OptimalDirectionCalculatorIf& dirCalculator, const quantity::Degrees increment = 1.0 * units::Degree)
-        : MinAcrossAngles(dirCalculator, static_cast<quantity::Radians>(increment))
-    {
-    }
+    MinAcrossAngles(const interfaces::OptimalDirectionCalculatorIf& dirCalculator) : m_directionCalculator(dirCalculator) {}
 
     quantity::Radians calculateInitialDirection(const geometry::Polygon2d& poly) const
     {
