@@ -27,7 +27,7 @@ class MinAcrossAngles
     {
         const static auto quarterTurn = static_cast<quantity::Radians>(units::Degree * 90);
 
-        const auto optimalDirResult = m_directionCalculator.calculateOptimalDirection(poly);
+        const auto optimalDirResult = m_directionCalculator.calculateOptimalDirectionAndCost(poly).first;
 
         // Return same cost, but normal to the optimal direction
         // as the sweep dir

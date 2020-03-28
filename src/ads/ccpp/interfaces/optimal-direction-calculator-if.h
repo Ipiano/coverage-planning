@@ -22,7 +22,9 @@ namespace interfaces
  * Since this is often a Hard Problem, an estimated best direction
  * will suffice.
  *
- * All calculations done by this class should use the same cost function
+ * All calculations done by this class should use the same cost function.
+ *
+ * All angles returned should be in the range [0, PI)
  */
 class OptimalDirectionCalculatorIf
 {
@@ -32,16 +34,16 @@ class OptimalDirectionCalculatorIf
     /*!
      * \brief Finds best direction for a specific shape with holes
      * \param[in] field Polygon to evaluate
-     * \return Appximate best angle of travel for the given shape
+     * \return Appximate best angle of travel for the given shape and cost of covering it that way
      */
-    virtual quantity::Radians calculateOptimalDirection(const geometry::Polygon2d& field) const = 0;
+    virtual std::pair<quantity::Radians, double> calculateOptimalDirectionAndCost(const geometry::Polygon2d& field) const = 0;
 
     /*!
      * \brief Finds best direction for a Doubly-Connected Edge List region
      * \param[in] dcelRegion DCEL region to evaluate
-     * \return Appximate best angle of travel for the given region
+     * \return Appximate best angle of travel for the given region and cost of covering it that way
      */
-    virtual quantity::Radians calculateOptimalDirection(const dcel::region_t& dcelRegion) const = 0;
+    virtual std::pair<quantity::Radians, double> calculateOptimalDirectionAndCost(const dcel::region_t& dcelRegion) const = 0;
 
     /*!
      * \brief Gives a cost value for a specific edge, if the direction of travel is a specfic angle

@@ -31,6 +31,9 @@ class PolygonDecomposerIf
      * * All edges which DO have a twin are edges that were created to split the polygon, and they are vertical
      * * For any region in the DCEL, there is no holes in any region, nor are there concavities on the left or
      *      right side of the region.
+     * * All vertices are at a distinct location. (i.e. if two points on the shape are in the same location, there
+     *      is only one dcel::vertex object instantiated)
+     * * For any two regions which are adjacent to each other, all edges they share are vertical and contiguous
      *
      * Regions ARE allowed to be degenerate (just a vertical line).
      *

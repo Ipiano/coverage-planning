@@ -25,6 +25,9 @@ class TurnCostCalculatorIf
     /*!
      * \brief Calculates the cost associated with turnarounds for an edge of a field
      *
+     * Must return the same value for an edge with the same points in the opposite order
+     * or any direction that is the given one + a multiple of 180 degrees
+     *
      * \param[in] edge An edge of a field boundary
      * \param[in] swathDir Direction of swathing (As if an A+ pattern)
      *

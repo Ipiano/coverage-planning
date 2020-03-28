@@ -30,34 +30,34 @@ template <class SumOp> SumOp for_each_segment(const dcel::region_t& region, SumO
 }
 
 template <class InputShape>
-quantity::Radians calculateOptimalDirection(const InputShape& shape, const quantity::Radians angleIncrement,
-                                            const interfaces::TurnCostCalculatorIf& turnCalculator)
+std::pair<quantity::Radians, double> calculateOptimalDirectionAndCost(const InputShape& shape, const quantity::Radians angleIncrement,
+                                                                      const interfaces::TurnCostCalculatorIf& turnCalculator)
 {
     const static auto maxAngle = static_cast<quantity::Radians>(180 * units::Degree);
 
-    std::pair<double, quantity::Radians> bestResult(-1, units::Radian * 0);
+    std::pair<quantity::Radians, double> bestResult(units::Radian * 0, -1);
 
     for (quantity::Radians currAngle = units::Radian * 0; currAngle < maxAngle; currAngle += angleIncrement)
     {
         const auto costSum = optimal_direction::for_each_segment(shape, AngleCostSum(turnCalculator, currAngle));
 
-        if (costSum.cost() < bestResult.first || bestResult.first < 0)
+        if (costSum.cost() < bestResult.second || bestResult.second < 0)
         {
-            bestResult = {costSum.cost(), currAngle};
+            bestResult = {currAngle, costSum.cost()};
         }
     }
 
-    return bestResult.second;
+    return bestResult;
 }
 
-quantity::Radians MinAcrossAngles::calculateOptimalDirection(const geometry::Polygon2d& poly) const
+std::pair<quantity::Radians, double> MinAcrossAngles::calculateOptimalDirectionAndCost(const geometry::Polygon2d& poly) const
 {
-    return optimal_direction::calculateOptimalDirection(poly, m_increment, m_turnCalculator);
+    return optimal_direction::calculateOptimalDirectionAndCost(poly, m_increment, m_turnCalculator);
 }
 
-quantity::Radians MinAcrossAngles::calculateOptimalDirection(const dcel::region_t& dcelRegion) const
+std::pair<quantity::Radians, double> MinAcrossAngles::calculateOptimalDirectionAndCost(const dcel::region_t& dcelRegion) const
 {
-    return optimal_direction::calculateOptimalDirection(dcelRegion, m_increment, m_turnCalculator);
+    return optimal_direction::calculateOptimalDirectionAndCost(dcelRegion, m_increment, m_turnCalculator);
 }
 
 double MinAcrossAngles::edgeCost(const geometry::Point2d& p1, const geometry::Point2d& p2, quantity::Radians direction) const
