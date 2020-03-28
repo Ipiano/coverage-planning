@@ -46,6 +46,18 @@ class OptimalDirectionCalculatorIf
     virtual std::pair<quantity::Radians, double> calculateOptimalDirectionAndCost(const dcel::region_t& dcelRegion) const = 0;
 
     /*!
+     * \brief Gives a cost value for a region, if the direction of travel is a specfic angle
+     *
+     * The points should not be assumed to be given in any specific order
+     *
+     * \param[in] dcelRegion DCEL region to evaluate
+     * \param[in] direction Direction of travel
+     *
+     * \return Some cost value
+     */
+    virtual double totalCost(const dcel::region_t& dcelRegion, quantity::Radians direction) const = 0;
+
+    /*!
      * \brief Gives a cost value for a specific edge, if the direction of travel is a specfic angle
      *
      * The points should not be assumed to be given in any specific order

@@ -1518,6 +1518,9 @@ void splitRegion(const dcel::region_t* region, const ccpp::quantity::Degrees ang
         {
             if (angleDifference(top->origin, top->next->origin, top->next->next->origin) >= angleTolerance)
             {
+                top->region    = top->prev->region;
+                bottom->region = bottom->next->region;
+
                 auto downward = downwardEdge(top->next, bottom, verticalEdges, dcel, dcelPoints);
                 auto upward   = downward->twin;
 
@@ -1528,6 +1531,7 @@ void splitRegion(const dcel::region_t* region, const ccpp::quantity::Degrees ang
                 top    = upward->next;
                 bottom = upward->prev;
 
+                downward->region = downward->prev->region;
                 top->region = bottom->region = upward->region;
             }
             else
@@ -1542,7 +1546,11 @@ void splitRegion(const dcel::region_t* region, const ccpp::quantity::Degrees ang
         {
             if (angleDifference(bottom->next->origin, bottom->origin, bottom->prev->origin) >= angleTolerance)
             {
-                auto upward = upwardEdge(bottom, top, verticalEdges, dcel, dcelPoints);
+                top->region    = top->prev->region;
+                bottom->region = bottom->next->region;
+
+                auto upward   = upwardEdge(bottom, top, verticalEdges, dcel, dcelPoints);
+                auto downward = upward->twin;
 
                 auto& newRegion = *dcel.regions.emplace(dcel.regions.end(), new dcel::region_t);
                 upward->region  = newRegion.get();
@@ -1551,6 +1559,7 @@ void splitRegion(const dcel::region_t* region, const ccpp::quantity::Degrees ang
                 top    = upward->next;
                 bottom = upward->prev;
 
+                downward->region = downward->next->region;
                 top->region = bottom->region = upward->region;
             }
             else
@@ -1560,6 +1569,14 @@ void splitRegion(const dcel::region_t* region, const ccpp::quantity::Degrees ang
             }
         }
     }
+
+    // Finish out the last region
+    while (top != bottom)
+    {
+        top->region = top->prev->region;
+        top         = top->next;
+    }
+    top->region = top->prev->region;
 }
 
 void splitRegions(DoublyConnectedEdgeList& dcel, DCELPointFactory& dcelPoints, const ccpp::quantity::Degrees angleTolerance)

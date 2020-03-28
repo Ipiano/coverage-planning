@@ -30,6 +30,12 @@ template <class SumOp> SumOp for_each_segment(const dcel::region_t& region, SumO
 }
 
 template <class InputShape>
+double cost(const InputShape& shape, const quantity::Radians angle, const interfaces::TurnCostCalculatorIf& turnCalculator)
+{
+    return optimal_direction::for_each_segment(shape, AngleCostSum(turnCalculator, angle)).cost();
+}
+
+template <class InputShape>
 std::pair<quantity::Radians, double> calculateOptimalDirectionAndCost(const InputShape& shape, const quantity::Radians angleIncrement,
                                                                       const interfaces::TurnCostCalculatorIf& turnCalculator)
 {
@@ -39,11 +45,11 @@ std::pair<quantity::Radians, double> calculateOptimalDirectionAndCost(const Inpu
 
     for (quantity::Radians currAngle = units::Radian * 0; currAngle < maxAngle; currAngle += angleIncrement)
     {
-        const auto costSum = optimal_direction::for_each_segment(shape, AngleCostSum(turnCalculator, currAngle));
+        const auto costSum = optimal_direction::cost(shape, currAngle, turnCalculator);
 
-        if (costSum.cost() < bestResult.second || bestResult.second < 0)
+        if (costSum < bestResult.second || bestResult.second < 0)
         {
-            bestResult = {currAngle, costSum.cost()};
+            bestResult = {currAngle, costSum};
         }
     }
 
@@ -58,6 +64,11 @@ std::pair<quantity::Radians, double> MinAcrossAngles::calculateOptimalDirectionA
 std::pair<quantity::Radians, double> MinAcrossAngles::calculateOptimalDirectionAndCost(const dcel::region_t& dcelRegion) const
 {
     return optimal_direction::calculateOptimalDirectionAndCost(dcelRegion, m_increment, m_turnCalculator);
+}
+
+double MinAcrossAngles::totalCost(const dcel::region_t& dcelRegion, quantity::Radians direction) const
+{
+    return optimal_direction::cost(dcelRegion, direction, m_turnCalculator);
 }
 
 double MinAcrossAngles::edgeCost(const geometry::Point2d& p1, const geometry::Point2d& p2, quantity::Radians direction) const

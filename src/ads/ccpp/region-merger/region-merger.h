@@ -16,12 +16,15 @@ class RegionMerger : public interfaces::RegionMergerIf
     RegionMerger(const interfaces::OptimalDirectionCalculatorIf& dirCalculator);
     ~RegionMerger() override = default;
 
-    void mergeRegions(DoublyConnectedEdgeList& dcel) override;
+    std::vector<interfaces::region_merger::MergeRegionGroup> mergeRegions(const DoublyConnectedEdgeList& dcel) override;
 
   private:
     const interfaces::OptimalDirectionCalculatorIf& m_dirCalculator;
 };
 
 }
+
+typedef region_merger::RegionMerger RegionMerger;
+
 }
 }
