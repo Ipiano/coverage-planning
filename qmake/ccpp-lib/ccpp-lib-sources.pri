@@ -27,4 +27,5 @@ SOURCES += \
     $$CCPP_ROOT/optimal-direction/min-across-angles.cpp \
     $$CCPP_ROOT/turn-cost/u-shaped.cpp \
     $$CCPP_ROOT/polygon-decomposer/modified-trapezoidal.cpp \
-    $$CCPP_ROOT/region-merger/region-merger.cpp
+    $$CCPP_ROOT/region-merger/region-merger.cpp \
+    $$CCPP_ROOT/dcel.cpp

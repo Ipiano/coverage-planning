@@ -65,6 +65,9 @@ template <class Functor> Functor for_each_segment(const DoublyConnectedEdgeList&
 
     return f;
 }
+
+std::pair<bool, std::string> is_valid(const DoublyConnectedEdgeList&);
+
 }
 
 typedef dcel::DoublyConnectedEdgeList DoublyConnectedEdgeList;

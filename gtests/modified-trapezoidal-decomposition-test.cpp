@@ -12,7 +12,8 @@
 #include <iostream>
 
 using namespace testing;
-using namespace ads::ccpp;
+using namespace ads;
+using namespace ccpp;
 namespace bg = boost::geometry;
 
 // Utility functions
@@ -38,105 +39,12 @@ struct DcelDescription
 // logically incorrect (e.g., adjacent edges don't have same region)
 AssertionResult DcelIsValid(const DoublyConnectedEdgeList& dcel)
 {
-    std::unordered_set<const dcel::region_t*> regionSet;
-    std::unordered_set<const dcel::half_edge_t*> edgeSet;
-    std::unordered_set<const dcel::vertex_t*> vertexSet;
+    bool isValid;
+    std::string errMsg;
 
-    for (size_t i = 0; i < dcel.regions.size(); i++)
-    {
-        const auto& region = dcel.regions[i];
+    std::tie(isValid, errMsg) = ccpp::dcel::is_valid(dcel);
 
-        if (!region)
-            return AssertionFailure() << "region " << i << " is null";
-
-        if (!region->edge)
-            return AssertionFailure() << "region " << i << " has null edge";
-
-        regionSet.insert(region.get());
-    }
-
-    for (size_t i = 0; i < dcel.edges.size(); i++)
-    {
-        const auto& edge = dcel.edges[i];
-
-        if (!edge)
-            return AssertionFailure() << "edge " << i << " is null";
-
-        if (!edge->next || !edge->prev)
-            return AssertionFailure() << "edge " << i << " has null neighbor";
-
-        if (!edge->origin)
-            return AssertionFailure() << "edge " << i << " has null origin";
-
-        if (!edge->region)
-            return AssertionFailure() << "edge " << i << " has null region";
-
-        edgeSet.insert(edge.get());
-    }
-
-    for (size_t i = 0; i < dcel.vertices.size(); i++)
-    {
-        const auto& vertex = dcel.vertices[i];
-
-        if (!vertex)
-            return AssertionFailure() << "vertex " << i << " is null";
-
-        if (!vertex->edge)
-            return AssertionFailure() << "vertex " << i << " has null edge";
-
-        if (edgeSet.count(vertex->edge) == 0)
-            return AssertionFailure() << "vertex " << i << " points to unknown edge";
-
-        vertexSet.insert(vertex.get());
-    }
-
-    for (size_t i = 0; i < dcel.edges.size(); i++)
-    {
-        const auto& edge = dcel.edges[i];
-
-        if (edgeSet.count(edge->next) == 0 || edgeSet.count(edge->prev) == 0)
-            return AssertionFailure() << "edge " << i << " has unknown neighbor";
-
-        if (edge->twin)
-        {
-            if (edgeSet.count(edge->twin) == 0)
-                return AssertionFailure() << "edge " << i << " has unknown twin";
-
-            if (edge->twin->twin != edge.get())
-                return AssertionFailure() << "edge " << i << " twin does not have edge " << i << " as twin";
-        }
-
-        if (vertexSet.count(edge->origin) == 0)
-            return AssertionFailure() << "edge " << i << " has unknown origin";
-
-        if (regionSet.count(edge->region) == 0)
-            return AssertionFailure() << "edge " << i << " has unknown region";
-
-        if (edge->region != edge->next->region || edge->region != edge->prev->region)
-            return AssertionFailure() << "edge " << i << " does not share region with neighbor";
-
-        if (edge->next->prev != edge.get() || edge->prev->next != edge.get())
-            return AssertionFailure() << "edge " << i << " is not properly linked to neighbors";
-
-        if (edge->next == edge.get() || edge->prev == edge.get())
-            return AssertionFailure() << "edge " << i << " is neighbor to itself";
-
-        if (edge->next == edge->prev)
-            return AssertionFailure() << "edge " << i << " has same next and previous";
-    }
-
-    for (size_t i = 0; i < dcel.regions.size(); i++)
-    {
-        const auto& region = dcel.regions[i];
-
-        if (edgeSet.count(region->edge) == 0)
-            return AssertionFailure() << "region " << i << " points to unknown edge";
-
-        if (region->edge->region != region.get())
-            return AssertionFailure() << "region " << i << " points to edge that does not point back";
-    }
-
-    return AssertionSuccess();
+    return isValid ? AssertionSuccess() : AssertionFailure() << errMsg;
 }
 
 // GTest checker that a DCEL has a specific structure, meaning
