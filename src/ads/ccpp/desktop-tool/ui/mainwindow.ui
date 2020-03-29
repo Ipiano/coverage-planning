@@ -50,6 +50,9 @@
       </item>
       <item>
        <widget class="QCheckBox" name="checkBox_sweepOrder">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
         <property name="text">
          <string>Sweep Order</string>
         </property>
@@ -59,6 +62,23 @@
        <widget class="QCheckBox" name="checkBox_decomposition">
         <property name="text">
          <string>Decomposition</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="checkBox_merged">
+        <property name="text">
+         <string>Merged Regions</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="checkBox_swaths">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="text">
+         <string>Swaths</string>
         </property>
        </widget>
       </item>

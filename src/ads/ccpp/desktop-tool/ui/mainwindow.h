@@ -36,6 +36,8 @@ class MainWindow : public QMainWindow
     QGraphicsItem* m_initialDirArrow = nullptr;
     QGraphicsItem* m_sweepPath       = nullptr;
     QGraphicsItem* m_decomposition   = nullptr;
+    QGraphicsItem* m_mergedRegions   = nullptr;
+    QGraphicsItem* m_swathLines      = nullptr;
 
     QString m_defaultFilePath = QDir::homePath();
     geometry::GeoPolygon2d<boost::geometry::radian> m_currentShape;
