@@ -53,6 +53,7 @@ template <class Functor> Functor for_each_segment(const dcel::region_t& region, 
     {
         const geometry::ConstReferringSegment2d segment(it->origin->location, it->next->origin->location);
         f(segment);
+        it = it->next;
     } while (it != region.edge);
 
     return f;
