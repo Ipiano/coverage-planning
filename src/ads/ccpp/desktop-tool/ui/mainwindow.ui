@@ -61,24 +61,31 @@
       <item>
        <widget class="QCheckBox" name="checkBox_decomposition">
         <property name="text">
-         <string>Decomposition</string>
+         <string>Unmerged Regions</string>
         </property>
        </widget>
       </item>
       <item>
-       <widget class="QCheckBox" name="checkBox_merged">
+       <widget class="QCheckBox" name="checkBox_unmergedSwaths">
+        <property name="text">
+         <string>Unmerged Swaths</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="checkBox_mergedRegions">
         <property name="text">
          <string>Merged Regions</string>
         </property>
        </widget>
       </item>
       <item>
-       <widget class="QCheckBox" name="checkBox_swaths">
+       <widget class="QCheckBox" name="checkBox_mergedSwaths">
         <property name="enabled">
          <bool>true</bool>
         </property>
         <property name="text">
-         <string>Swaths</string>
+         <string>Merged Swaths</string>
         </property>
        </widget>
       </item>
@@ -120,6 +127,13 @@
         <property name="text">
          <string>Rotate To
 Sweep Dir</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="button_recalculate">
+        <property name="text">
+         <string>Recalculate</string>
         </property>
        </widget>
       </item>

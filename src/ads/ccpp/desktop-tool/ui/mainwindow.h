@@ -32,12 +32,13 @@ class MainWindow : public QMainWindow
 
     QGraphicsScene* m_scene;
 
-    QGraphicsItem* m_rawShape        = nullptr;
-    QGraphicsItem* m_initialDirArrow = nullptr;
-    QGraphicsItem* m_sweepPath       = nullptr;
-    QGraphicsItem* m_decomposition   = nullptr;
-    QGraphicsItem* m_mergedRegions   = nullptr;
-    QGraphicsItem* m_swathLines      = nullptr;
+    QGraphicsItem* m_rawShape          = nullptr;
+    QGraphicsItem* m_initialDirArrow   = nullptr;
+    QGraphicsItem* m_sweepPath         = nullptr;
+    QGraphicsItem* m_decomposition     = nullptr;
+    QGraphicsItem* m_optimalSwathLines = nullptr;
+    QGraphicsItem* m_mergedRegions     = nullptr;
+    QGraphicsItem* m_mergedSwathLines  = nullptr;
 
     QString m_defaultFilePath = QDir::homePath();
     geometry::GeoPolygon2d<boost::geometry::radian> m_currentShape;

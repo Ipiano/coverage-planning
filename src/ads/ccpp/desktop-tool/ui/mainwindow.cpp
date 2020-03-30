@@ -69,10 +69,12 @@ MainWindow::MainWindow(const QVector<std::shared_ptr<ImportShapeInterfaceFactory
     connect(m_ui->checkBox_sweepOrder, &QCheckBox::clicked, this, &MainWindow::updateView);
     connect(m_ui->checkBox_rotate, &QCheckBox::clicked, this, &MainWindow::updateView);
     connect(m_ui->checkBox_decomposition, &QCheckBox::clicked, this, &MainWindow::updateView);
-    connect(m_ui->checkBox_merged, &QCheckBox::clicked, this, &MainWindow::updateView);
-    connect(m_ui->checkBox_swaths, &QCheckBox::clicked, this, &MainWindow::updateView);
+    connect(m_ui->checkBox_unmergedSwaths, &QCheckBox::clicked, this, &MainWindow::updateView);
+    connect(m_ui->checkBox_mergedRegions, &QCheckBox::clicked, this, &MainWindow::updateView);
+    connect(m_ui->checkBox_mergedSwaths, &QCheckBox::clicked, this, &MainWindow::updateView);
 
     connect(m_ui->spinBox_tolerance, static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), this, &MainWindow::recalculate);
+    connect(m_ui->button_recalculate, &QPushButton::clicked, this, &MainWindow::recalculate);
 
     m_defaultFilePath = "/home/ipiano/Documents/Code/MastersProject/test-files";
 
@@ -158,8 +160,9 @@ void MainWindow::updateView()
     m_initialDirArrow->setVisible(m_ui->checkBox_initialDir->checkState() == Qt::CheckState::Checked);
     //m_sweepPath->setVisible(m_ui->checkBox_sweepOrder->checkState() == Qt::CheckState::Checked);
     m_decomposition->setVisible(m_ui->checkBox_decomposition->checkState() == Qt::CheckState::Checked);
-    m_mergedRegions->setVisible(m_ui->checkBox_merged->checkState() == Qt::CheckState::Checked);
-    m_swathLines->setVisible(m_ui->checkBox_swaths->checkState() == Qt::CheckState::Checked);
+    m_optimalSwathLines->setVisible(m_ui->checkBox_unmergedSwaths->checkState() == Qt::CheckState::Checked);
+    m_mergedRegions->setVisible(m_ui->checkBox_mergedRegions->checkState() == Qt::CheckState::Checked);
+    m_mergedSwathLines->setVisible(m_ui->checkBox_mergedSwaths->checkState() == Qt::CheckState::Checked);
 
     // Always flip scene upside down so +y is up
     QTransform transform(1, 0, 0, 0, -1, 0, 0, 0, 1);
@@ -232,14 +235,41 @@ void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::radian>& shape)
             throw std::runtime_error(err);
 
         ccpp::SwathAndRegionProducer swather(50);
-        auto swathsAndRegions = swather.produceSwathsAndRegions(dcel, regionGroups);
+
+        // Produce fake regions to get swaths the optimal directions
+        std::vector<ccpp::interfaces::region_merger::MergeRegionGroup> singleRegionGroups;
+        for (const auto& regionPtr : dcel.regions)
+        {
+            ccpp::interfaces::region_merger::MergeRegion region;
+            region.dcelRegion = regionPtr.get();
+
+            const auto dirCost = dirCalculator.calculateOptimalDirectionAndCost(*regionPtr);
+            region.swathDir    = dirCost.first;
+
+            singleRegionGroups.push_back({{region}});
+        }
+
+        auto unmergedSwathsAndRegions = swather.produceSwathsAndRegions(dcel, singleRegionGroups);
+        auto mergedSwathsAndRegions   = swather.produceSwathsAndRegions(dcel, regionGroups);
 
         //Rotate back to original orientation
         //and scale up for displaying
         for (const auto& point : dcel.vertices)
             bg::transform(point->location, point->location, invTransform);
 
-        for (auto& swathsAndRegion : swathsAndRegions)
+        for (auto& swathsAndRegion : mergedSwathsAndRegions)
+        {
+            ccpp::geometry::Ring2d newRing;
+            ccpp::geometry::MultiLine2d newLine;
+
+            bg::transform(swathsAndRegion.first, newRing, invTransform);
+            bg::transform(swathsAndRegion.second, newLine, invTransform);
+
+            swathsAndRegion.first  = std::move(newRing);
+            swathsAndRegion.second = std::move(newLine);
+        }
+
+        for (auto& swathsAndRegion : unmergedSwathsAndRegions)
         {
             ccpp::geometry::Ring2d newRing;
             ccpp::geometry::MultiLine2d newLine;
@@ -255,21 +285,25 @@ void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::radian>& shape)
         m_decomposition = drawRegions(dcel);
         m_scene->addItem(m_decomposition);
 
-        auto regionsAndLines = drawMergedRegions(swathsAndRegions);
-        m_mergedRegions      = regionsAndLines[0];
-        m_swathLines         = regionsAndLines[1];
+        auto unmergedRegionsAndLines = drawMergedRegions(unmergedSwathsAndRegions);
+        m_optimalSwathLines          = unmergedRegionsAndLines[1];
+        m_scene->addItem(m_optimalSwathLines);
+
+        auto mergedRegionsAndLines = drawMergedRegions(mergedSwathsAndRegions);
+        m_mergedRegions            = mergedRegionsAndLines[0];
+        m_mergedSwathLines         = mergedRegionsAndLines[1];
         m_scene->addItem(m_mergedRegions);
-        m_scene->addItem(m_swathLines);
+        m_scene->addItem(m_mergedSwathLines);
     }
     catch (std::exception& ex)
     {
         qCritical() << "Exception:" << ex.what();
-        m_decomposition = new QGraphicsItemGroup();
-        m_mergedRegions = new QGraphicsItemGroup();
-        m_swathLines    = new QGraphicsItemGroup();
+        m_decomposition    = new QGraphicsItemGroup();
+        m_mergedRegions    = new QGraphicsItemGroup();
+        m_mergedSwathLines = new QGraphicsItemGroup();
         m_scene->addItem(m_decomposition);
         m_scene->addItem(m_mergedRegions);
-        m_scene->addItem(m_swathLines);
+        m_scene->addItem(m_mergedSwathLines);
     }
 
     const auto rect   = m_rawShape->boundingRect();
