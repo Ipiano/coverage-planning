@@ -275,7 +275,8 @@ void mergeTwoRegions(dcel::region_t* left, dcel::region_t* right, dcel::half_edg
 
     // Calculate cost of not merging the regions and
     // just using their optimal directions separately.
-    // All savings values are relative to this
+    // If we can beat this with a merge strategy, then we go
+    // with it
     const double optimalUnmergedCost = leftRegionMergeDetails->optimalDirectionCost + rightRegionMergeDetails->optimalDirectionCost;
 
     //! 2. If the two regions have the same optimal direction, merge them immediately

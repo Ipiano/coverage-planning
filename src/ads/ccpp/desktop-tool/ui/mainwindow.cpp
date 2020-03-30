@@ -73,6 +73,7 @@ MainWindow::MainWindow(const QVector<std::shared_ptr<ImportShapeInterfaceFactory
     connect(m_ui->checkBox_mergedRegions, &QCheckBox::clicked, this, &MainWindow::updateView);
     connect(m_ui->checkBox_mergedSwaths, &QCheckBox::clicked, this, &MainWindow::updateView);
 
+    connect(m_ui->spinBox_width, static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), this, &MainWindow::recalculate);
     connect(m_ui->spinBox_tolerance, static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), this, &MainWindow::recalculate);
     connect(m_ui->button_recalculate, &QPushButton::clicked, this, &MainWindow::recalculate);
 
@@ -234,7 +235,7 @@ void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::radian>& shape)
         if (!valid)
             throw std::runtime_error(err);
 
-        ccpp::SwathAndRegionProducer swather(50);
+        ccpp::SwathAndRegionProducer swather(m_ui->spinBox_width->value());
 
         // Produce fake regions to get swaths the optimal directions
         std::vector<ccpp::interfaces::region_merger::MergeRegionGroup> singleRegionGroups;
