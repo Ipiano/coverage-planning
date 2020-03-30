@@ -9,6 +9,8 @@ HEADERS += \
     $$CCPP_ROOT/typedefs.h \
     $$CCPP_ROOT/angle-cost-sum.hpp \
     $$CCPP_ROOT/coordinate-transform.hpp \
+    $$CCPP_ROOT/interfaces/swath-and-region-producer-if.h \
+    $$CCPP_ROOT/swath-and-region-producer/swath-and-region-producer.h \
     \
     $$CCPP_ROOT/interfaces/polygon-decomposer-if.h \
     $$CCPP_ROOT/interfaces/initial-cost-calculator-if.h \
@@ -28,4 +30,5 @@ SOURCES += \
     $$CCPP_ROOT/turn-cost/u-shaped.cpp \
     $$CCPP_ROOT/polygon-decomposer/modified-trapezoidal.cpp \
     $$CCPP_ROOT/region-merger/region-merger.cpp \
-    $$CCPP_ROOT/dcel.cpp
+    $$CCPP_ROOT/dcel.cpp \
+    $$CCPP_ROOT/swath-and-region-producer/swath-and-region-producer.cpp

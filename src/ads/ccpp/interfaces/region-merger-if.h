@@ -37,6 +37,7 @@ class RegionMergerIf
      *
      * \return List of MergeRegionGroups; where each indicates a group of regions that should
      * be merged together. All regions in the input must be in exactly one of the output MergeRegionGroups.
+     * Regions in a group should be ordered from left to right
      */
     virtual std::vector<region_merger::MergeRegionGroup> mergeRegions(const DoublyConnectedEdgeList& dcel) = 0;
 };

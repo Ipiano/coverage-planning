@@ -6,6 +6,7 @@
 #include "ads/ccpp/polygon-decomposer/modified-trapezoidal.h"
 #include "ads/ccpp/coordinate-transform.hpp"
 #include "ads/ccpp/region-merger/region-merger.h"
+#include "ads/ccpp/swath-and-region-producer/swath-and-region-producer.h"
 
 #include "ads/ccpp/desktop-tool/coordinate-transform.h"
 #include "ads/ccpp/dcel.h"
@@ -44,7 +45,8 @@ QGraphicsItem* drawItem(const ccpp::geometry::Polygon2d& poly);
 QGraphicsItem* drawItem(const ccpp::geometry::Ring2d& ring);
 QGraphicsItem* drawArrow(const ccpp::geometry::Point2d& origin, const double& length, const quantity::Radians& angle);
 QGraphicsItem* drawRegions(const ccpp::DoublyConnectedEdgeList& dcel);
-std::array<QGraphicsItem*, 2> drawMergedRegions(const std::vector<ccpp::interfaces::region_merger::MergeRegionGroup>& regionGroups);
+std::array<QGraphicsItem*, 2>
+drawMergedRegions(const std::vector<std::pair<ccpp::geometry::Ring2d, ccpp::geometry::MultiLine2d>>& regionGroups);
 //QGraphicsItem* createSweepPath(const std::vector<const dcel::const_half_edge_t*> edges);
 
 QPointF makePoint(const ccpp::geometry::Point2d& pt)
@@ -68,6 +70,7 @@ MainWindow::MainWindow(const QVector<std::shared_ptr<ImportShapeInterfaceFactory
     connect(m_ui->checkBox_rotate, &QCheckBox::clicked, this, &MainWindow::updateView);
     connect(m_ui->checkBox_decomposition, &QCheckBox::clicked, this, &MainWindow::updateView);
     connect(m_ui->checkBox_merged, &QCheckBox::clicked, this, &MainWindow::updateView);
+    connect(m_ui->checkBox_swaths, &QCheckBox::clicked, this, &MainWindow::updateView);
 
     connect(m_ui->spinBox_tolerance, static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), this, &MainWindow::recalculate);
 
@@ -156,6 +159,7 @@ void MainWindow::updateView()
     //m_sweepPath->setVisible(m_ui->checkBox_sweepOrder->checkState() == Qt::CheckState::Checked);
     m_decomposition->setVisible(m_ui->checkBox_decomposition->checkState() == Qt::CheckState::Checked);
     m_mergedRegions->setVisible(m_ui->checkBox_merged->checkState() == Qt::CheckState::Checked);
+    m_swathLines->setVisible(m_ui->checkBox_swaths->checkState() == Qt::CheckState::Checked);
 
     // Always flip scene upside down so +y is up
     QTransform transform(1, 0, 0, 0, -1, 0, 0, 0, 1);
@@ -227,23 +231,35 @@ void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::radian>& shape)
         if (!valid)
             throw std::runtime_error(err);
 
+        ccpp::SwathAndRegionProducer swather(50);
+        auto swathsAndRegions = swather.produceSwathsAndRegions(dcel, regionGroups);
+
         //Rotate back to original orientation
         //and scale up for displaying
         for (const auto& point : dcel.vertices)
             bg::transform(point->location, point->location, invTransform);
 
-        for (auto& regionGroup : regionGroups)
-            for (auto& region : regionGroup.regionsToMerge)
-                region.swathDir += m_sweepDir;
+        for (auto& swathsAndRegion : swathsAndRegions)
+        {
+            ccpp::geometry::Ring2d newRing;
+            ccpp::geometry::MultiLine2d newLine;
+
+            bg::transform(swathsAndRegion.first, newRing, invTransform);
+            bg::transform(swathsAndRegion.second, newLine, invTransform);
+
+            swathsAndRegion.first  = std::move(newRing);
+            swathsAndRegion.second = std::move(newLine);
+        }
 
         // Draw the picture
         m_decomposition = drawRegions(dcel);
         m_scene->addItem(m_decomposition);
 
-        auto regionsAndLines = drawMergedRegions(regionGroups);
+        auto regionsAndLines = drawMergedRegions(swathsAndRegions);
         m_mergedRegions      = regionsAndLines[0];
         m_swathLines         = regionsAndLines[1];
         m_scene->addItem(m_mergedRegions);
+        m_scene->addItem(m_swathLines);
     }
     catch (std::exception& ex)
     {
@@ -338,7 +354,7 @@ QPointF point(const dcel::vertex_t* vertex)
     return {vertex->location.x(), vertex->location.y()};
 }
 
-QGraphicsItem* createRegion(const ccpp::dcel::region_t& region)
+QGraphicsItem* drawRegion(const ccpp::dcel::region_t& region)
 {
     QPolygonF poly;
 
@@ -366,62 +382,45 @@ QGraphicsItem* drawRegions(const ccpp::DoublyConnectedEdgeList& dcel)
 
     for (const auto& region : dcel.regions)
     {
-        items->addToGroup(createRegion(*region));
+        items->addToGroup(drawRegion(*region));
     }
 
     return items;
 }
 
-std::array<QGraphicsItem*, 2> drawMergedRegion(const ccpp::interfaces::region_merger::MergeRegionGroup& regionGroup)
-{
-    // TODO: Make lines
-    QGraphicsItemGroup* lines = new QGraphicsItemGroup;
-
-    std::unordered_set<dcel::region_t*> dcelRegions;
-    for (const auto& mergeRegion : regionGroup.regionsToMerge)
-        dcelRegions.insert(mergeRegion.dcelRegion);
-
-    // Find an edge that's not shared
-    auto firstEdge = regionGroup.regionsToMerge[0].dcelRegion->edge;
-    while (firstEdge->twin != nullptr)
-        firstEdge = firstEdge->next;
-
-    // Walk around the edge; when a shared edge is found
-    // hop over it if it connects to one of the regions in
-    // the group
-    QPolygonF poly;
-    auto currEdge = firstEdge;
-    do
-    {
-        poly.push_back(point(currEdge->origin));
-        currEdge = currEdge->next;
-
-        if (currEdge->twin != nullptr && dcelRegions.count(currEdge->twin->region))
-            currEdge = currEdge->twin->next;
-
-    } while (currEdge != firstEdge);
-
-    auto color = randomColor();
-    color.setAlpha(125);
-
-    QGraphicsPolygonItem* region = new QGraphicsPolygonItem(poly);
-    region->setPen(QPen(QBrush(QColor("black")), 2));
-    region->setBrush(QBrush(color));
-    region->setVisible(true);
-
-    return {region, lines};
-}
-
-std::array<QGraphicsItem*, 2> drawMergedRegions(const std::vector<ccpp::interfaces::region_merger::MergeRegionGroup>& regionGroups)
+std::array<QGraphicsItem*, 2>
+drawMergedRegions(const std::vector<std::pair<ccpp::geometry::Ring2d, ccpp::geometry::MultiLine2d>>& regionGroups)
 {
     QGraphicsItemGroup* regions = new QGraphicsItemGroup;
     QGraphicsItemGroup* lines   = new QGraphicsItemGroup;
 
     for (const auto& group : regionGroups)
     {
-        const auto groupResult = drawMergedRegion(group);
-        regions->addToGroup(groupResult[0]);
-        lines->addToGroup(groupResult[1]);
+        QPolygonF qRing(int(group.first.size()));
+
+        std::transform(group.first.begin(), group.first.end(), qRing.begin(),
+                       [](const ccpp::geometry::Point2d& pt) { return QPointF(bg::get<0>(pt), bg::get<1>(pt)); });
+
+        auto color = randomColor();
+        color.setAlpha(125);
+
+        QGraphicsPolygonItem* region = new QGraphicsPolygonItem(qRing);
+        region->setPen(QPen(QBrush(QColor("black")), 2));
+        region->setBrush(QBrush(color));
+        region->setVisible(true);
+        regions->addToGroup(region);
+
+        for (const auto& line : group.second)
+        {
+            QPainterPath path({line.front().x(), line.front().y()});
+            for (const auto& pt : line)
+                path.lineTo(pt.x(), pt.y());
+
+            QGraphicsPathItem* gPath = new QGraphicsPathItem(path);
+            gPath->setPen(QPen(QBrush(QColor("black")), 2));
+            gPath->setVisible(true);
+            lines->addToGroup(gPath);
+        }
     }
 
     return {regions, lines};

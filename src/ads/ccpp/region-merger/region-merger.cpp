@@ -112,7 +112,9 @@ std::vector<MergeRegionGroup> mergeRegions(const DoublyConnectedEdgeList& dcel, 
         while (regionPtr != nullptr)
         {
             MergeRegion mr;
-            mr.swathDir   = regionPtr->rightMergeGroup ? regionPtr->rightMergeGroup->leftRegionDir : regionPtr->optimalDirection;
+            mr.swathDir = regionPtr->leftMergeGroup
+                              ? regionPtr->leftMergeGroup->rightRegionDir
+                              : (regionPtr->rightMergeGroup ? regionPtr->rightMergeGroup->leftRegionDir : regionPtr->optimalDirection);
             mr.dcelRegion = regionPtr->dcelRegion;
 
             mergeGroup.regionsToMerge.push_back(mr);
