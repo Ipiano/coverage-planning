@@ -83,9 +83,17 @@ MultiLine2d makeSwaths(const Ring2d& region, const MergeRegionGroup& mergeGroup,
 {
     const static auto quarter = static_cast<quantity::Radians>(units::Degree * 90);
 
-    const auto bbox = bg::return_envelope<Box2d>(region);
+    // Inflate the bounding box just slightly so that if the edges of a
+    // line would be directly on it, we don't flag them as outside it
+    const auto bbox = [&] {
+        auto tmp = bg::return_envelope<Box2d>(region);
+        bg::subtract_point(tmp.min_corner(), Point2d {1, 1});
+        bg::add_point(tmp.max_corner(), Point2d {1, 1});
+        return tmp;
+    }();
 
     // Max possible length of a swath; +1 to guarantee the ends lie outside the bbox
+    // so if they don't get trimmed at all, we can easily identify them
     const double swathLength = bg::distance(bbox.min_corner(), bbox.max_corner()) + 1;
     const size_t swathCount  = size_t((swathLength / swathWidth) + 0.5);
 
@@ -106,8 +114,8 @@ MultiLine2d makeSwaths(const Ring2d& region, const MergeRegionGroup& mergeGroup,
         subregionRing.push_back(subregionRing.front());
 
         bg::correct(subregionRing);
-        if (!bg::is_valid(subregionRing))
-            continue;
+        //if (!bg::is_valid(subregionRing))
+        //continue;
 
         const auto normalDir = normal(subregion.swathDir);
         const Point2d offset = {cos(normalDir.value()) * swathWidth, sin(normalDir.value()) * swathWidth};
