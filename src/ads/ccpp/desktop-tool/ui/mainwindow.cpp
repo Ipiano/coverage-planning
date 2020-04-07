@@ -73,8 +73,8 @@ MainWindow::MainWindow(const QVector<std::shared_ptr<ImportShapeInterfaceFactory
     connect(m_ui->checkBox_mergedRegions, &QCheckBox::clicked, this, &MainWindow::updateView);
     connect(m_ui->checkBox_mergedSwaths, &QCheckBox::clicked, this, &MainWindow::updateView);
 
-    connect(m_ui->spinBox_width, static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), this, &MainWindow::recalculate);
-    connect(m_ui->spinBox_tolerance, static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), this, &MainWindow::recalculate);
+    //connect(m_ui->spinBox_width, static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), this, &MainWindow::recalculate);
+    //connect(m_ui->spinBox_tolerance, static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), this, &MainWindow::recalculate);
     connect(m_ui->button_recalculate, &QPushButton::clicked, this, &MainWindow::recalculate);
 
     m_defaultFilePath = "/home/ipiano/Documents/Code/MastersProject/test-files";
