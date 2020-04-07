@@ -140,7 +140,11 @@ std::pair<bool, geometry::GeoPolygon2d<boost::geometry::radian>> GeojsonImporter
             return {false, {}};
         }
 
-        result.inners().push_back(std::move(maybeInner.second));
+        // Ignore invalid holes inside the shape
+        if (bg::is_valid(maybeInner.second))
+        {
+            result.inners().push_back(std::move(maybeInner.second));
+        }
     }
 
     boost::geometry::correct(result);

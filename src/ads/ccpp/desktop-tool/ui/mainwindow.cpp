@@ -183,6 +183,32 @@ void MainWindow::resizeEvent(QResizeEvent*)
     updateView();
 }
 
+void removeDups(ccpp::geometry::Ring2d& ring)
+{
+    for (auto it = ring.begin() + 1; it != ring.end(); it++)
+    {
+        if (bg::distance(*it, *(it - 1)) < 0.001)
+            it = ring.erase(it);
+    }
+}
+
+void removeSpikes(ccpp::geometry::Ring2d& ring)
+{
+}
+
+void cleanRing(ccpp::geometry::Ring2d& ring)
+{
+    removeDups(ring);
+    removeSpikes(ring);
+}
+
+void cleanShape(ccpp::geometry::Polygon2d& poly)
+{
+    cleanRing(poly.outer());
+    for (auto& inner : poly.inners())
+        cleanRing(inner);
+}
+
 void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::radian>& shape)
 {
     m_scene->clear();
@@ -202,8 +228,13 @@ void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::radian>& shape)
     bg::strategy::transform::scale_transformer<double, 2, 2> scale(1e6, 1e6);
     bg::transform(shapeXY2, shapeXY1, scale);
 
-    const auto& scaledShapeXY = shapeXY1;
-    const auto& shapeXY       = shapeXY1;
+    cleanShape(shapeXY1);
+    bg::correct(shapeXY1);
+
+    bg::simplify(shapeXY1, shapeXY2, 0.1);
+
+    const auto& scaledShapeXY = shapeXY2;
+    const auto& shapeXY       = shapeXY2;
     m_rawShape                = drawItem(scaledShapeXY);
 
     ccpp::turn_cost::UShaped turnCost(1 / 0.5, 1 / 2., 1 / 2.);
@@ -299,10 +330,12 @@ void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::radian>& shape)
     catch (std::exception& ex)
     {
         qCritical() << "Exception:" << ex.what();
-        m_decomposition    = new QGraphicsItemGroup();
-        m_mergedRegions    = new QGraphicsItemGroup();
-        m_mergedSwathLines = new QGraphicsItemGroup();
+        m_decomposition     = new QGraphicsItemGroup();
+        m_mergedRegions     = new QGraphicsItemGroup();
+        m_mergedSwathLines  = new QGraphicsItemGroup();
+        m_optimalSwathLines = new QGraphicsItemGroup();
         m_scene->addItem(m_decomposition);
+        m_scene->addItem(m_optimalSwathLines);
         m_scene->addItem(m_mergedRegions);
         m_scene->addItem(m_mergedSwathLines);
     }
