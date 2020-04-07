@@ -18,6 +18,19 @@ namespace ccpp
 namespace polygon_decomposer
 {
 
+struct AssertionFailure : public std::runtime_error
+{
+    AssertionFailure(const std::string& str) : std::runtime_error(str) {}
+};
+
+#define Q(x) #x
+#define QUOTE(x) Q(x)
+#define ASSERT(x)                         \
+    if (!(x))                             \
+    {                                     \
+        throw AssertionFailure(QUOTE(x)); \
+    }
+
 struct vertex_index
 {
     typedef geometry::Point2d result_type;
@@ -389,9 +402,9 @@ class VerticalEdgeList
     // Should always insert the downward edge
     void insert(dcel::half_edge_t* edge)
     {
-        assert(edge && edge->twin && edge->origin && edge->twin->origin);
-        assert(std::abs(edge->origin->location.x() - edge->twin->origin->location.x()) < 0.00001);
-        assert(edge->origin->location.y() >= edge->twin->origin->location.y());
+        ASSERT(edge && edge->twin && edge->origin && edge->twin->origin);
+        ASSERT(std::abs(edge->origin->location.x() - edge->twin->origin->location.x()) < 0.00001);
+        ASSERT(edge->origin->location.y() >= edge->twin->origin->location.y());
 
         const auto insertIt = std::lower_bound(m_edges.begin(), m_edges.end(), edge, verticalEdgeLessThan);
         m_edges.insert(insertIt, edge);
@@ -645,8 +658,8 @@ dcel::half_edge_t* downwardEdge(dcel::half_edge_t* edgeFromPointAbove, Edge* edg
     // clockwise on the end result region, so we will split it apart
     // if the intersection is not where it ends
     // and point it to the twin half edge coming back up
-    assert(edgeBelow->halfEdge != nullptr);
-    assert(edgeBelow->halfEdge->next != nullptr);
+    ASSERT(edgeBelow->halfEdge != nullptr);
+    ASSERT(edgeBelow->halfEdge->next != nullptr);
 
     auto pointAbove = edgeFromPointAbove->origin;
 
@@ -665,8 +678,8 @@ dcel::half_edge_t* downwardEdge(dcel::half_edge_t* edgeFromPointAbove, Edge* edg
     // vertical line
     if (edgeBelow->isVertical())
     {
-        assert(!edgeBelow->isVerticalZigZag());
-        assert(edgeBelow->firstPoint() == edgeBelow->firstEdge()->firstPoint());
+        ASSERT(!edgeBelow->isVerticalZigZag());
+        ASSERT(edgeBelow->firstPoint() == edgeBelow->firstEdge()->firstPoint());
 
         edgeBelow = edgeBelow->secondEdge();
     }
@@ -769,8 +782,8 @@ dcel::half_edge_t* upwardEdge(dcel::half_edge_t* edgeFromPointBelow, Edge* edgeA
     // clockwise on its region, so we will split it apart
     // if the intersection is not where it ends
     // and point it to the twin half edge coming back down
-    assert(edgeAbove->halfEdge != nullptr);
-    assert(edgeAbove->halfEdge->prev != nullptr);
+    ASSERT(edgeAbove->halfEdge != nullptr);
+    ASSERT(edgeAbove->halfEdge->prev != nullptr);
 
     auto pointBelow = edgeFromPointBelow->origin;
 
@@ -789,8 +802,8 @@ dcel::half_edge_t* upwardEdge(dcel::half_edge_t* edgeFromPointBelow, Edge* edgeA
     // vertical line
     if (edgeAbove->isVertical())
     {
-        assert(!edgeAbove->isVerticalZigZag());
-        assert(edgeAbove->secondPoint() == edgeAbove->secondEdge()->secondPoint());
+        ASSERT(!edgeAbove->isVerticalZigZag());
+        ASSERT(edgeAbove->secondPoint() == edgeAbove->secondEdge()->secondPoint());
 
         edgeAbove = edgeAbove->firstEdge();
     }
@@ -897,17 +910,17 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly, DCELP
             // Move the sweep line forward to remove any edges that end before the one we're
             // finishing
             activeEdges.removeLessThan(currentEdge.secondPoint()->location);
-            assert((activeEdges.size() % 2) == 0);
+            ASSERT((activeEdges.size() % 2) == 0);
 
             // Edges that are the end of a loop should always
             // be in scope when they are finished
             const auto currentEdgeActiveIndex = activeEdges.indexOf(currentEdgePtr);
-            assert(currentEdgeActiveIndex != -1);
+            ASSERT(currentEdgeActiveIndex != -1);
 
             // The last edge processed in a loop will always
             // be attached to the other 'end of loop' segment on the second point
             const auto adjacentEdgeActiveIndex = activeEdges.indexOf(currentEdge.secondEdge());
-            assert(adjacentEdgeActiveIndex != -1);
+            ASSERT(adjacentEdgeActiveIndex != -1);
 
             const bool isLowerEdge = currentEdgeActiveIndex < adjacentEdgeActiveIndex;
             const auto lowerEdge   = isLowerEdge ? currentEdgePtr : currentEdge.secondEdge();
@@ -918,8 +931,8 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly, DCELP
 
             // When we finish a loop, both of the last two edges on the
             // loop should still be active
-            assert(lowerEdgeIndex != -1);
-            assert(upperEdgeIndex != -1);
+            ASSERT(lowerEdgeIndex != -1);
+            ASSERT(upperEdgeIndex != -1);
 
             // If the lower edge is even, then the loop closes
             // in 'outside' space - either in a hole or outside
@@ -932,8 +945,8 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly, DCELP
 
             // When we finish a loop, there should be at least one edge
             // above and below the closing edges.
-            assert(upperEdgeIndex < activeEdges.size() - 1);
-            assert(lowerEdgeIndex > 0);
+            ASSERT(upperEdgeIndex < activeEdges.size() - 1);
+            ASSERT(lowerEdgeIndex > 0);
 
             const auto lowerDcelEdge = lowerEdge->halfEdge;
             const auto upperDcelEdge = upperEdge->halfEdge;
@@ -1098,7 +1111,7 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly, DCELP
             }
         }
 
-        assert((activeEdges.size() % 2) == 0);
+        ASSERT((activeEdges.size() % 2) == 0);
 
         // Gets the index of the current edge in the active edges list; or, if it's
         // not there, the index of the edge connected. This only happens when
@@ -1110,7 +1123,7 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly, DCELP
 
             if (tmp == -1)
             {
-                assert(currentEdge.isVertical());
+                ASSERT(currentEdge.isVertical());
 
                 if (currentEdge.isVerticalZigZag() && currentEdge.secondEdge()->secondPoint() == currentEdge.secondPoint())
                     tmp = activeEdges.indexOf(currentEdge.firstEdge());
@@ -1121,7 +1134,7 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly, DCELP
             return tmp;
         }();
 
-        assert(currEdgeActiveIndex >= 0);
+        ASSERT(currEdgeActiveIndex >= 0);
 
         // Update current edge to be a part of whatever region the edge to the
         // left of it. This is incorrect if the edge is the start of a loop,
@@ -1223,7 +1236,7 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly, DCELP
             // it's vertical, and we don't want it in there anyway)
             //const auto nextEdgeActiveIndex = activeEdges.insert(nextEdgePtr);
 
-            //assert(nextEdgeActiveIndex == currEdgeActiveIndex + 1);
+            //ASSERT(nextEdgeActiveIndex == currEdgeActiveIndex + 1);
 
             //! iv. Connect the two edges together
             //  Which two edges? The segment from the loop and the next segment on the polygon?
@@ -1336,7 +1349,7 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly, DCELP
             // of the vertical zig-zag lines as a loop begin, and
             // we don't want to do that.
 
-            assert(edgeAbove != topEdgePtr);
+            ASSERT(edgeAbove != topEdgePtr);
 
             dcel::half_edge_t* upward;
             if (topEdgePtr->isVertical())
@@ -1355,7 +1368,7 @@ DoublyConnectedEdgeList decompose(const geometry::Polygon2d& originalPoly, DCELP
             upward->region = upward->next->region = upward->prev->region = upperDcelRegion.get();
             upperDcelRegion->edge                                        = upward;
 
-            assert(!endOfLoop);
+            ASSERT(!endOfLoop);
             //if (endOfLoop)
             //unfinishedEdges.insert(currentEdgePtr.get());
         }
