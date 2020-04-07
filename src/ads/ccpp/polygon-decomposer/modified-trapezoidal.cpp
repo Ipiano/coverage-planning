@@ -268,6 +268,17 @@ class ActiveEdgeList
 {
     std::vector<Edge*> m_edges;
 
+    // Finds any intersection between two lines
+    // The only time there are more than 1 is if the lines are colinear
+    static geometry::Point2d anyIntersection(const geometry::ConstReferringSegment2d& s1, const geometry::Segment2d& s2)
+    {
+        bg::model::multi_point<geometry::Point2d> intersections;
+        bg::intersection(s1, s2, intersections);
+        ASSERT(intersections.size() > 0);
+
+        return intersections[0];
+    }
+
     // For the sake of the active edge list, we keep track of them 'vertically'
     // by checking if a point on the second is to the left of a point on the other
     // line. If this is the case then we know the second one must be 'above' the first
@@ -290,17 +301,49 @@ class ActiveEdgeList
         else if (maxYR < minYL)
             return false;
 
-        // Make unit vectors out of the edges; and check dot products
-        const auto unitL1L2   = unit(geometry::ConstReferringSegment2d(l->firstPoint()->location, l->secondPoint()->location));
-        const auto normalL1L2 = geometry::Point2d {-unitL1L2.y(), unitL1L2.x()};
-        const auto unitL1R1   = unit(geometry::ConstReferringSegment2d(l->firstPoint()->location, r->firstPoint()->location));
-        const auto unitL1R2   = unit(geometry::ConstReferringSegment2d(l->firstPoint()->location, r->secondPoint()->location));
+        // If not the trivial case, then find the stretch of the X axis that both lines
+        // are in; in theory, this should always exist because of how the sweep line algo
+        // works
+        //
+        // Once the min and max X coordinates that both lines share are found, we can check
+        // the segments along that stretch to see if one is under the other
 
-        // TODO: Use different epsilon?
-        if (r->firstPoint() == l->firstPoint() || r->firstPoint() == l->secondPoint() ||
-            std::abs(bg::dot_product(normalL1L2, unitL1R1) - 1) < 0.00001)
-            return bg::dot_product(normalL1L2, unitL1R2) > 0;
-        return bg::dot_product(normalL1L2, unitL1R1) > 0;
+        auto minXL = l->firstPoint()->location.x();
+        auto maxXL = l->secondPoint()->location.x();
+        if (maxXL < minXL)
+            std::swap(minXL, maxXL);
+
+        auto minXR = r->firstPoint()->location.x();
+        auto maxXR = r->secondPoint()->location.x();
+        if (maxXR < minXR)
+            std::swap(minXR, maxXR);
+
+        const auto sharedRangeStart = std::max(minXL, minXR);
+        const auto sharedRangeEnd   = std::min(maxXL, maxXR);
+
+        const auto minY = std::min(minYR, minYL) - 1;
+        const auto maxY = std::max(maxYR, maxYL) + 1;
+
+        ASSERT(sharedRangeStart <= sharedRangeEnd);
+
+        geometry::Segment2d vertical {{sharedRangeStart, minY}, {sharedRangeStart, maxY}};
+
+        const auto p1L = anyIntersection({l->firstPoint()->location, l->secondPoint()->location}, vertical);
+        const auto p1R = anyIntersection({r->firstPoint()->location, r->secondPoint()->location}, vertical);
+
+        // If the first points are the same, check the second; otherwise just check if one
+        // is under the other
+        if (std::abs(p1L.y() - p1R.y()) < 0.0000001)
+        {
+            vertical.first.set<0>(sharedRangeEnd);
+            vertical.second.set<0>(sharedRangeEnd);
+
+            const auto p2L = anyIntersection({l->firstPoint()->location, l->secondPoint()->location}, vertical);
+            const auto p2R = anyIntersection({r->firstPoint()->location, r->secondPoint()->location}, vertical);
+
+            return p2L.y() < p2R.y();
+        }
+        return p1L.y() < p1R.y();
     }
 
   public:
