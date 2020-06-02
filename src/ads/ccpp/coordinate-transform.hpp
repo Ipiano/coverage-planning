@@ -10,6 +10,10 @@
 
 #include "ads/ccpp/typedefs.h"
 
+// GCC gives false positives on one of the qmv constructors below
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+
 namespace ads
 {
 namespace ccpp
@@ -25,8 +29,8 @@ boost::geometry::strategy::transform::matrix_transformer<double, 2, 2> moveToOri
 
     const auto centroid = boost::geometry::return_centroid<typename boost::geometry::point_type<T>::type>(shape);
 
-    const boost::qvm::vec<double, 2> v1 = {-centroid.x(), -centroid.y()};
-    const matrix tr                     = translation_mat(v1);
+    const boost::qvm::vec<double, 2> v1{-centroid.x(), -centroid.y()};
+    const matrix tr = translation_mat(v1);
 
     constexpr boost::qvm::vec<double, 3> v2 = {0, 0, 1};
     const matrix rot                        = boost::qvm::rot_mat<3>(v2, angle.value());
@@ -36,3 +40,5 @@ boost::geometry::strategy::transform::matrix_transformer<double, 2, 2> moveToOri
 }
 }
 }
+
+#pragma GCC diagnostic pop
