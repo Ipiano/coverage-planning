@@ -22,6 +22,12 @@ namespace desktop_tool
 namespace import_plugins
 {
 
+//! Cleans a ring in an attempt to make bg::is_valid more likely to succeed
+void clean(geometry::GeoRing2d<bg::degree>&);
+
+//! Calculates unit vector in same direction as v
+template <class Vector2T> Vector2T unit(Vector2T v);
+
 GeojsonImporter::GeojsonImporter()
 {
 }
@@ -131,17 +137,23 @@ std::pair<bool, geometry::GeoPolygon2d<bg::degree>> GeojsonImporter::importShape
 
     for (int i = 1; i < coords.size(); i++)
     {
-        const auto maybeInner = convertPoly(coords.at(i).toArray());
-        if (!maybeInner.first)
+        bool success;
+        geometry::GeoRing2d<bg::degree> inner;
+
+        std::tie(success, inner) = convertPoly(coords.at(i).toArray());
+        if (!success)
         {
             qWarning() << "File" << fileData.fileName() << "has invalid inner polygon ring at index" << i;
             return {false, {}};
         }
 
+        clean(inner);
+        bg::correct(inner);
+
         // Ignore invalid holes inside the shape
-        if (bg::is_valid(maybeInner.second))
+        if (bg::is_valid(inner))
         {
-            result.inners().push_back(std::move(maybeInner.second));
+            result.inners().push_back(std::move(inner));
         }
     }
 
@@ -156,6 +168,71 @@ ImportShapeInterface* GeojsonImporterFactory::create() const
 void GeojsonImporterFactory::destroy(ImportShapeInterface* importer) const
 {
     delete importer;
+}
+
+/*!
+ * \brief Cleans a ring that was read so that it's more likely to pass a boost is_valid check
+ *
+ * This is done by removing any edges which are colinear or cause a spike. In other words
+ * this removes points between edges with an angle of 0 or 180 degrees.
+ *
+ * \param[in, out] ring Ring to clean
+ */
+void clean(geometry::GeoRing2d<bg::degree>& ring)
+{
+    if (ring.size() < 3)
+        return;
+
+    size_t currInd = 0;
+
+    while (currInd < ring.size() - 2)
+    {
+        const auto curr = ring.begin() + currInd;
+
+        // Get next 3 consecutive points
+        const auto& a = *curr;
+        const auto& b = *(curr + 1);
+        const auto& c = *(curr + 2);
+
+        // Calculate the two edges
+        auto ab = b;
+        bg::subtract_point(ab, a);
+        ab = unit(ab);
+
+        auto bc = c;
+        bg::subtract_point(bc, b);
+        bc = unit(bc);
+
+        // Find dot product
+        const double dot = bg::dot_product(ab, bc);
+
+        // If 1 or -1, then they are colinear or a spike, so we remove the
+        // middle one
+        if (std::abs(std::abs(dot) - 1) < 0.0000001)
+        {
+            ring.erase(curr + 1);
+
+            // When we remove a point we need to step backwards if possible
+            // because  there could be nested issues we need to solve.
+            // (e.g. a spike off a spike, or a spike that breaks a colinear section)
+            currInd--;
+        }
+        else
+        {
+            currInd++;
+        }
+    }
+}
+
+template <class Vector2T> Vector2T unit(Vector2T v)
+{
+    const auto a = bg::get<0>(v);
+    const auto b = bg::get<1>(v);
+
+    const auto mag = std::sqrt(a * a + b * b);
+    bg::divide_value(v, mag);
+
+    return v;
 }
 }
 }
