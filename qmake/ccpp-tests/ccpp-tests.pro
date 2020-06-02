@@ -1,7 +1,8 @@
 TEMPLATE = app
 unset(QT)
-CONFIG += console c++11
+CONFIG += console
 
+include($$top_qmakedir/cpp-flags.pri)
 include($$top_qmakedir/ccpp.pri)
 include($$top_qmakedir/output-dirs.pri)
 include($$top_qmakedir/gtest.pri)
@@ -15,5 +16,3 @@ TEST_ROOT=$$PROJECT_ROOT/gtests
 LIBS += -lboost_regex
 
 SOURCES += $$files($$TEST_ROOT/*test.cpp, true)
-
-QMAKE_CXXFLAGS += -Wno-deprecated-copy

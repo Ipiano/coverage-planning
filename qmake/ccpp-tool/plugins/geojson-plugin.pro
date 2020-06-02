@@ -1,8 +1,9 @@
 TEMPLATE = lib
 QT -= gui widgets
-CONFIG += plugin c++11
+CONFIG += plugin
 TARGET = geojson
 
+include($$top_qmakedir/cpp-flags.pri)
 include($$top_qmakedir/output-dirs.pri)
 include($$top_qmakedir/boost.pri)
 
@@ -18,5 +19,3 @@ SOURCES += \
 
 HEADERS += \
     $$PLUGINS_ROOT/geojson.h
-
-QMAKE_CXXFLAGS += -Wno-deprecated-copy

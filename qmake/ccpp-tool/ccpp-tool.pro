@@ -1,8 +1,9 @@
 TEMPLATE = app
 QT += gui widgets
-CONFIG += console c++11
+CONFIG += console
 TARGET = ccpp-tool
 
+include($$top_qmakedir/cpp-flags.pri)
 include($$top_qmakedir/ccpp.pri)
 include($$top_qmakedir/output-dirs.pri)
 
@@ -21,5 +22,3 @@ HEADERS += \
     $$TOOL_ROOT/ui/mainwindow.h \
     $$TOOL_ROOT/coordinate-transform.h \
     $$TOOL_ROOT/typedefs.h
-
-QMAKE_CXXFLAGS += -Wno-deprecated-copy
