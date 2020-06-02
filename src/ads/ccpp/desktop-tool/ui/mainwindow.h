@@ -41,7 +41,7 @@ class MainWindow : public QMainWindow
     QGraphicsItem* m_mergedSwathLines  = nullptr;
 
     QString m_defaultFilePath = QDir::homePath();
-    geometry::GeoPolygon2d<boost::geometry::radian> m_currentShape;
+    geometry::GeoPolygon2d<boost::geometry::degree> m_currentShape;
 
     std::unique_ptr<Ui::MainWindow> m_ui;
 
@@ -55,7 +55,7 @@ class MainWindow : public QMainWindow
 
   private slots:
     void loadFile();
-    void loadShape(const geometry::GeoPolygon2d<boost::geometry::radian>& shape);
+    void loadShape(const geometry::GeoPolygon2d<boost::geometry::degree>& shape);
     void updateView();
     void recalculate();
 };

@@ -36,19 +36,17 @@ bool isPolygon(const QJsonObject& object)
     return object["geometry"].toObject()["type"].toString() == "Polygon";
 }
 
-std::pair<bool, geometry::GeoRing2d<bg::radian>> convertPoly(const QJsonArray& coords)
+std::pair<bool, geometry::GeoRing2d<bg::degree>> convertPoly(const QJsonArray& coords)
 {
     if (coords.size() < 3)
         return {false, {}};
 
-    geometry::GeoRing2d<bg::radian> ring;
+    geometry::GeoRing2d<bg::degree> ring;
     ring.resize(uint32_t(coords.size()));
 
     std::transform(coords.begin(), coords.end(), ring.begin(), [](const QJsonValue& coordArr) {
         const QJsonArray coords = coordArr.toArray();
-        return boost::geometry::make<geometry::GeoPoint2d<bg::radian>>(
-            static_cast<quantity::Radians>(units::Degree * coords.at(0).toDouble()).value(),
-            static_cast<quantity::Radians>(units::Degree * coords.at(1).toDouble()).value());
+        return boost::geometry::make<geometry::GeoPoint2d<bg::degree>>(coords.at(0).toDouble(), coords.at(1).toDouble());
     });
 
     if (boost::geometry::distance(ring.front(), ring.back()) > 0.0001)
@@ -62,7 +60,7 @@ std::pair<bool, geometry::GeoRing2d<bg::radian>> convertPoly(const QJsonArray& c
     return {true, std::move(ring)};
 }
 
-std::pair<bool, geometry::GeoPolygon2d<boost::geometry::radian>> GeojsonImporter::importShape(const QFileInfo& fileInfo) const
+std::pair<bool, geometry::GeoPolygon2d<bg::degree>> GeojsonImporter::importShape(const QFileInfo& fileInfo) const
 {
     QFile fileData(fileInfo.filePath());
 
@@ -121,7 +119,7 @@ std::pair<bool, geometry::GeoPolygon2d<boost::geometry::radian>> GeojsonImporter
     const QJsonObject geometry = featureObject["geometry"].toObject();
     const QJsonArray coords    = geometry["coordinates"].toArray();
 
-    geometry::GeoPolygon2d<bg::radian> result;
+    geometry::GeoPolygon2d<bg::degree> result;
     const auto maybeOuter = convertPoly(coords.at(0).toArray());
     if (!maybeOuter.first)
     {

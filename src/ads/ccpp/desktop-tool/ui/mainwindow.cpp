@@ -139,8 +139,8 @@ void MainWindow::loadFile()
     else
     {
         m_ui->label_fileName->setText("Loaded File: " + chosen.filePath());
-        m_currentShape = maybeShape.second;
-        loadShape(maybeShape.second);
+        m_currentShape = std::move(maybeShape.second);
+        loadShape(m_currentShape);
     }
 }
 
@@ -209,12 +209,9 @@ void cleanShape(ccpp::geometry::Polygon2d& poly)
         cleanRing(inner);
 }
 
-void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::radian>& shape)
+void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::degree>& shapeDegrees)
 {
     m_scene->clear();
-
-    geometry::GeoPolygon2d<bg::degree> shapeDegrees;
-    bg::transform(shape, shapeDegrees);
 
     auto shapeXY1 = cast_polygon<ccpp::geometry::Polygon2d>(shapeDegrees);
     ccpp::geometry::Polygon2d shapeXY2;

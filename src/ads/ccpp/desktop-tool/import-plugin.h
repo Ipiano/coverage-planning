@@ -35,7 +35,7 @@ class ImportShapeInterface
     // Points should be in lon, lat order to keep with the x, y coord type
     //
     // Return [success, shape] where shape is empty if success is false
-    virtual std::pair<bool, geometry::GeoPolygon2d<boost::geometry::radian>> importShape(const QFileInfo& file) const = 0;
+    virtual std::pair<bool, geometry::GeoPolygon2d<boost::geometry::degree>> importShape(const QFileInfo& file) const = 0;
 };
 
 class ImportShapeInterfaceFactory

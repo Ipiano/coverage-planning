@@ -17,7 +17,7 @@ class GeojsonImporter : public QObject, public ImportShapeInterface
     GeojsonImporter();
 
     virtual QStringList fileTypes() const override;
-    virtual std::pair<bool, geometry::GeoPolygon2d<boost::geometry::radian>> importShape(const QFileInfo& fileInfo) const override;
+    virtual std::pair<bool, geometry::GeoPolygon2d<boost::geometry::degree>> importShape(const QFileInfo& fileInfo) const override;
 };
 
 class GeojsonImporterFactory : public QObject, public ImportShapeInterfaceFactory
