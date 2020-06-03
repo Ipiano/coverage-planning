@@ -183,37 +183,11 @@ void MainWindow::resizeEvent(QResizeEvent*)
     updateView();
 }
 
-void removeDups(ccpp::geometry::Ring2d& ring)
-{
-    for (auto it = ring.begin() + 1; it != ring.end(); it++)
-    {
-        if (bg::distance(*it, *(it - 1)) < 0.001)
-            it = ring.erase(it);
-    }
-}
-
-void removeSpikes(ccpp::geometry::Ring2d& ring)
-{
-}
-
-void cleanRing(ccpp::geometry::Ring2d& ring)
-{
-    removeDups(ring);
-    removeSpikes(ring);
-}
-
-void cleanShape(ccpp::geometry::Polygon2d& poly)
-{
-    cleanRing(poly.outer());
-    for (auto& inner : poly.inners())
-        cleanRing(inner);
-}
-
 void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::degree>& shapeDegrees)
 {
     m_scene->clear();
 
-    auto shapeXY1 = cast_polygon<ccpp::geometry::Polygon2d>(shapeDegrees);
+    auto shapeXY1 = project_polygon(shapeDegrees);
     ccpp::geometry::Polygon2d shapeXY2;
 
     ccpp::geometry::Point2d centroid;
@@ -222,17 +196,12 @@ void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::degree>& shapeDegree
     bg::strategy::transform::translate_transformer<double, 2, 2> translate(-bg::get<0>(centroid), -bg::get<1>(centroid));
     bg::transform(shapeXY1, shapeXY2, translate);
 
-    bg::strategy::transform::scale_transformer<double, 2, 2> scale(1e6, 1e6);
-    bg::transform(shapeXY2, shapeXY1, scale);
+    bg::simplify(shapeXY2, shapeXY1, 0.1);
 
-    cleanShape(shapeXY1);
-    bg::correct(shapeXY1);
+    const auto& shapeXY = shapeXY1;
 
-    bg::simplify(shapeXY1, shapeXY2, 0.1);
 
-    const auto& scaledShapeXY = shapeXY2;
-    const auto& shapeXY       = shapeXY2;
-    m_rawShape                = drawItem(scaledShapeXY);
+    m_rawShape = drawItem(shapeXY);
 
     ccpp::turn_cost::UShaped turnCost(1 / 0.5, 1 / 2., 1 / 2.);
     ccpp::optimal_direction::MinAcrossAngles dirCalculator(turnCost);

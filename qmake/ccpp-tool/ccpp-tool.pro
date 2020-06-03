@@ -5,6 +5,7 @@ TARGET = ccpp-tool
 
 include($$top_qmakedir/cpp-flags.pri)
 include($$top_qmakedir/ccpp.pri)
+include($$top_qmakedir/geographiclib.pri)
 include($$top_qmakedir/output-dirs.pri)
 
 SOURCE_ROOT = $$top_srcdir/src
