@@ -41,12 +41,16 @@ namespace ui
 namespace bg = boost::geometry;
 namespace bu = boost::units;
 
-QGraphicsItem* drawItem(const ccpp::geometry::Polygon2d& poly);
-QGraphicsItem* drawItem(const ccpp::geometry::Ring2d& ring);
-QGraphicsItem* drawArrow(const ccpp::geometry::Point2d& origin, const double& length, const quantity::Radians& angle);
-QGraphicsItem* drawRegions(const ccpp::DoublyConnectedEdgeList& dcel);
+// All coordinates are multiplied by this before drawing
+// on the scene to get higher resolution/zooming capabilities
+constexpr double SCENE_SCALING = 100;
+template <class PointT> QPointF scenePoint(const PointT& p);
+QGraphicsItem* drawItem(const ccpp::geometry::Polygon2d& poly, double borderWidth);
+QGraphicsItem* drawItem(const ccpp::geometry::Ring2d& ring, double borderWidth);
+QGraphicsItem* drawArrow(const ccpp::geometry::Point2d& origin, const double& length, const quantity::Radians& angle, const double width);
+QGraphicsItem* drawRegions(const ccpp::DoublyConnectedEdgeList& dcel, double borderWidth);
 std::array<QGraphicsItem*, 2>
-drawMergedRegions(const std::vector<std::pair<ccpp::geometry::Ring2d, ccpp::geometry::MultiLine2d>>& regionGroups);
+drawMergedRegions(const std::vector<std::pair<ccpp::geometry::Ring2d, ccpp::geometry::MultiLine2d>>& regionGroups, double borderWidth);
 //QGraphicsItem* createSweepPath(const std::vector<const dcel::const_half_edge_t*> edges);
 
 QPointF makePoint(const ccpp::geometry::Point2d& pt)
@@ -200,8 +204,15 @@ void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::degree>& shapeDegree
 
     const auto& shapeXY = shapeXY1;
 
+    const auto shapeRect   = bg::return_envelope<ccpp::geometry::Box2d>(shapeXY);
+    const auto shapeWidth  = std::abs(shapeRect.max_corner().x() - shapeRect.min_corner().x());
+    const auto shapeHeight = std::abs(shapeRect.max_corner().y() - shapeRect.min_corner().y());
+    const auto shapeDiag   = std::sqrt(shapeWidth + shapeWidth * shapeHeight + shapeHeight);
 
-    m_rawShape = drawItem(shapeXY);
+    // Works pretty well as an average width for viewing
+    const auto borderWidth = std::max(1., 0.075 * shapeDiag);
+
+    m_rawShape = drawItem(shapeXY, borderWidth);
 
     ccpp::turn_cost::UShaped turnCost(1 / 0.5, 1 / 2., 1 / 2.);
     ccpp::optimal_direction::MinAcrossAngles dirCalculator(turnCost);
@@ -280,14 +291,14 @@ void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::degree>& shapeDegree
         }
 
         // Draw the picture
-        m_decomposition = drawRegions(dcel);
+        m_decomposition = drawRegions(dcel, borderWidth);
         m_scene->addItem(m_decomposition);
 
-        auto unmergedRegionsAndLines = drawMergedRegions(unmergedSwathsAndRegions);
+        auto unmergedRegionsAndLines = drawMergedRegions(unmergedSwathsAndRegions, borderWidth);
         m_optimalSwathLines          = unmergedRegionsAndLines[1];
         m_scene->addItem(m_optimalSwathLines);
 
-        auto mergedRegionsAndLines = drawMergedRegions(mergedSwathsAndRegions);
+        auto mergedRegionsAndLines = drawMergedRegions(mergedSwathsAndRegions, borderWidth);
         m_mergedRegions            = mergedRegionsAndLines[0];
         m_mergedSwathLines         = mergedRegionsAndLines[1];
         m_scene->addItem(m_mergedRegions);
@@ -306,9 +317,7 @@ void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::degree>& shapeDegree
         m_scene->addItem(m_mergedSwathLines);
     }
 
-    const auto rect   = m_rawShape->boundingRect();
-    const auto diag   = std::sqrt(rect.width() * rect.width() + rect.height() * rect.height());
-    m_initialDirArrow = drawArrow(bg::make_zero<ccpp::geometry::Point2d>(), 0.25 * diag, initialResult);
+    m_initialDirArrow = drawArrow(bg::make_zero<ccpp::geometry::Point2d>(), 0.25 * shapeDiag, initialResult, borderWidth);
 
     m_scene->addItem(m_rawShape);
     m_scene->addItem(m_initialDirArrow);
@@ -317,39 +326,48 @@ void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::degree>& shapeDegree
     updateView();
 }
 
-QGraphicsItem* drawItem(const ccpp::geometry::Polygon2d& poly)
+template <> QPointF scenePoint<ccpp::geometry::Point2d>(const ccpp::geometry::Point2d& pt)
+{
+    return {bg::get<0>(pt) * SCENE_SCALING, bg::get<1>(pt) * SCENE_SCALING};
+}
+
+template <> QPointF scenePoint<ccpp::dcel::vertex_t*>(ccpp::dcel::vertex_t* const& pt)
+{
+    return scenePoint(pt->location);
+}
+
+QGraphicsItem* drawItem(const ccpp::geometry::Polygon2d& poly, double borderWidth)
 {
     auto shapeGroup = new QGraphicsItemGroup();
-    shapeGroup->addToGroup(drawItem(poly.outer()));
+    shapeGroup->addToGroup(drawItem(poly.outer(), borderWidth));
     for (const auto& ring : poly.inners())
     {
-        shapeGroup->addToGroup(drawItem(ring));
+        shapeGroup->addToGroup(drawItem(ring, borderWidth));
     }
 
     return shapeGroup;
 }
 
-QGraphicsItem* drawItem(const ccpp::geometry::Ring2d& ring)
+QGraphicsItem* drawItem(const ccpp::geometry::Ring2d& ring, double borderWidth)
 {
     QPolygonF qRing(int(ring.size()));
 
-    std::transform(ring.begin(), ring.end(), qRing.begin(),
-                   [](const ccpp::geometry::Point2d& pt) { return QPointF(bg::get<0>(pt), bg::get<1>(pt)); });
+    std::transform(ring.begin(), ring.end(), qRing.begin(), &scenePoint<ccpp::geometry::Point2d>);
 
     QGraphicsPolygonItem* ringGraphic = new QGraphicsPolygonItem(qRing);
-    ringGraphic->setPen(QPen(QBrush(QColor(0, 0, 0, 90)), 5));
+    ringGraphic->setPen(QPen(QBrush(QColor(0, 0, 0, 90)), borderWidth));
     return ringGraphic;
 }
 
-QGraphicsItem* drawArrow(const ccpp::geometry::Point2d& origin, const double& length, const quantity::Radians& angle)
+QGraphicsItem* drawArrow(const ccpp::geometry::Point2d& origin, const double& length, const quantity::Radians& angle, const double width)
 {
-    QPainterPath path({bg::get<0>(origin), bg::get<1>(origin)});
+    QPainterPath path(scenePoint(origin));
 
     ccpp::geometry::Point2d tip = bg::make<ccpp::geometry::Point2d>(std::cos(angle.value()), std::sin(angle.value()));
     bg::multiply_value(tip, length);
     bg::add_point(tip, origin);
 
-    const QPointF qTip(bg::get<0>(tip), bg::get<1>(tip));
+    const QPointF qTip(scenePoint(tip));
     path.lineTo(qTip);
 
     const auto offset = static_cast<quantity::Radians>(10 * bu::degree::degree);
@@ -359,7 +377,7 @@ QGraphicsItem* drawArrow(const ccpp::geometry::Point2d& origin, const double& le
     bg::multiply_value(left, length * 0.8);
     bg::add_point(left, origin);
 
-    path.lineTo({bg::get<0>(left), bg::get<1>(left)});
+    path.lineTo(scenePoint(left));
     path.lineTo(qTip);
 
     ccpp::geometry::Point2d right =
@@ -367,10 +385,10 @@ QGraphicsItem* drawArrow(const ccpp::geometry::Point2d& origin, const double& le
     bg::multiply_value(right, length * 0.8);
     bg::add_point(right, origin);
 
-    path.lineTo({bg::get<0>(right), bg::get<1>(right)});
+    path.lineTo(scenePoint(right));
 
     auto pathItem = new QGraphicsPathItem(path);
-    pathItem->setPen(QPen(QBrush(QColor("black")), 3));
+    pathItem->setPen(QPen(QBrush(QColor("black")), width * 2));
 
     return pathItem;
 }
@@ -383,12 +401,7 @@ QColor randomColor()
     return QColor(rgbDist(reng), rgbDist(reng), rgbDist(reng));
 }
 
-QPointF point(const dcel::vertex_t* vertex)
-{
-    return {vertex->location.x(), vertex->location.y()};
-}
-
-QGraphicsItem* drawRegion(const ccpp::dcel::region_t& region)
+QGraphicsItem* drawRegion(const ccpp::dcel::region_t& region, double borderWidth)
 {
     QPolygonF poly;
 
@@ -396,34 +409,34 @@ QGraphicsItem* drawRegion(const ccpp::dcel::region_t& region)
     auto currEdge        = firstEdge;
     do
     {
-        poly.push_back(point(currEdge->origin));
+        poly.push_back(scenePoint(currEdge->origin));
     } while ((currEdge = currEdge->next) != firstEdge);
 
     auto fill = randomColor();
     fill.setAlpha(125);
 
     QGraphicsPolygonItem* polyItem = new QGraphicsPolygonItem(poly);
-    polyItem->setPen(QPen(QBrush(QColor("black")), 2));
+    polyItem->setPen(QPen(QBrush(QColor("black")), borderWidth));
     polyItem->setBrush(QBrush(fill));
     polyItem->setVisible(true);
 
     return polyItem;
 }
 
-QGraphicsItem* drawRegions(const ccpp::DoublyConnectedEdgeList& dcel)
+QGraphicsItem* drawRegions(const ccpp::DoublyConnectedEdgeList& dcel, double borderWidth)
 {
     QGraphicsItemGroup* items = new QGraphicsItemGroup;
 
     for (const auto& region : dcel.regions)
     {
-        items->addToGroup(drawRegion(*region));
+        items->addToGroup(drawRegion(*region, borderWidth));
     }
 
     return items;
 }
 
 std::array<QGraphicsItem*, 2>
-drawMergedRegions(const std::vector<std::pair<ccpp::geometry::Ring2d, ccpp::geometry::MultiLine2d>>& regionGroups)
+drawMergedRegions(const std::vector<std::pair<ccpp::geometry::Ring2d, ccpp::geometry::MultiLine2d>>& regionGroups, double borderWidth)
 {
     QGraphicsItemGroup* regions = new QGraphicsItemGroup;
     QGraphicsItemGroup* lines   = new QGraphicsItemGroup;
@@ -432,26 +445,25 @@ drawMergedRegions(const std::vector<std::pair<ccpp::geometry::Ring2d, ccpp::geom
     {
         QPolygonF qRing(int(group.first.size()));
 
-        std::transform(group.first.begin(), group.first.end(), qRing.begin(),
-                       [](const ccpp::geometry::Point2d& pt) { return QPointF(bg::get<0>(pt), bg::get<1>(pt)); });
+        std::transform(group.first.begin(), group.first.end(), qRing.begin(), &scenePoint<ccpp::geometry::Point2d>);
 
         auto color = randomColor();
         color.setAlpha(125);
 
         QGraphicsPolygonItem* region = new QGraphicsPolygonItem(qRing);
-        region->setPen(QPen(QBrush(QColor("black")), 2));
+        region->setPen(QPen(QBrush(QColor("black")), borderWidth));
         region->setBrush(QBrush(color));
         region->setVisible(true);
         regions->addToGroup(region);
 
         for (const auto& line : group.second)
         {
-            QPainterPath path({line.front().x(), line.front().y()});
+            QPainterPath path(scenePoint(line.front()));
             for (const auto& pt : line)
-                path.lineTo(pt.x(), pt.y());
+                path.lineTo(scenePoint(pt));
 
             QGraphicsPathItem* gPath = new QGraphicsPathItem(path);
-            gPath->setPen(QPen(QBrush(QColor("black")), 2));
+            gPath->setPen(QPen(QBrush(QColor("black")), borderWidth));
             gPath->setVisible(true);
             lines->addToGroup(gPath);
         }
