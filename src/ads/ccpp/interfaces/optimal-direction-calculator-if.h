@@ -7,7 +7,7 @@
 #include <boost/units/systems/si/io.hpp>
 
 #include "ads/ccpp/typedefs.h"
-#include "ads/ccpp/dcel.h"
+#include "ads/dcel/dcel.h"
 
 namespace ads
 {
@@ -43,7 +43,7 @@ class OptimalDirectionCalculatorIf
      * \param[in] dcelRegion DCEL region to evaluate
      * \return Appximate best angle of travel for the given region and cost of covering it that way
      */
-    virtual std::pair<quantity::Radians, double> calculateOptimalDirectionAndCost(const dcel::region_t& dcelRegion) const = 0;
+    virtual std::pair<quantity::Radians, double> calculateOptimalDirectionAndCost(dcel::Region dcelRegion) const = 0;
 
     /*!
      * \brief Gives a cost value for a region, if the direction of travel is a specfic angle
@@ -55,7 +55,7 @@ class OptimalDirectionCalculatorIf
      *
      * \return Some cost value
      */
-    virtual double totalCost(const dcel::region_t& dcelRegion, quantity::Radians direction) const = 0;
+    virtual double totalCost(dcel::Region dcelRegion, quantity::Radians direction) const = 0;
 
     /*!
      * \brief Gives a cost value for a specific edge, if the direction of travel is a specfic angle

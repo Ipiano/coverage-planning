@@ -18,7 +18,7 @@ class SwathAndRegionProducer : public interfaces::SwathAndRegionProducerIf
     ~SwathAndRegionProducer() override = default;
 
     std::vector<std::pair<geometry::Ring2d, geometry::MultiLine2d>>
-    produceSwathsAndRegions(const DoublyConnectedEdgeList& dcel,
+    produceSwathsAndRegions(const Dcel& dcel,
                             const std::vector<interfaces::region_merger::MergeRegionGroup>& mergeGroups) override;
 };
 }

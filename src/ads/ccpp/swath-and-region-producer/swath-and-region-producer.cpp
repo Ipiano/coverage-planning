@@ -21,8 +21,7 @@ SwathAndRegionProducer::SwathAndRegionProducer(const double swathWidth) : m_swat
 {
 }
 
-vector<pair<Ring2d, MultiLine2d>> SwathAndRegionProducer::produceSwathsAndRegions(const DoublyConnectedEdgeList&,
-                                                                                  const vector<MergeRegionGroup>& mergeGroups)
+vector<pair<Ring2d, MultiLine2d>> SwathAndRegionProducer::produceSwathsAndRegions(const Dcel&, const vector<MergeRegionGroup>& mergeGroups)
 {
     vector<pair<Ring2d, MultiLine2d>> result;
 
@@ -41,15 +40,15 @@ Ring2d makeRegion(const MergeRegionGroup& regionGroup)
 {
     Ring2d ring;
 
-    std::unordered_set<dcel::region_t*> dcelRegions;
+    std::unordered_set<dcel::Region> dcelRegions;
     for (const auto& mergeRegion : regionGroup.regionsToMerge)
         dcelRegions.insert(mergeRegion.dcelRegion);
 
     // Find an edge that's not shared
-    auto firstEdge = regionGroup.regionsToMerge[0].dcelRegion->edge;
-    while (firstEdge->twin != nullptr && dcelRegions.count(firstEdge->twin->region) > 0)
+    auto firstEdge = regionGroup.regionsToMerge[0].dcelRegion.edge();
+    while (firstEdge.twin() && dcelRegions.count(firstEdge.twin().region()) > 0)
     {
-        firstEdge = firstEdge->next;
+        firstEdge = firstEdge.next();
     }
 
     // Walk around the edge; when a shared edge is found
@@ -58,12 +57,12 @@ Ring2d makeRegion(const MergeRegionGroup& regionGroup)
     auto currEdge = firstEdge;
     do
     {
-        ring.push_back(currEdge->origin->location);
+        ring.push_back(currEdge.origin().point());
 
-        currEdge = currEdge->next;
+        currEdge = currEdge.next();
 
-        while (currEdge->twin != nullptr && dcelRegions.count(currEdge->twin->region))
-            currEdge = currEdge->twin->next;
+        while (currEdge.twin() && dcelRegions.count(currEdge.twin().region()))
+            currEdge = currEdge.twin().next();
 
     } while (currEdge != firstEdge);
 
@@ -87,8 +86,8 @@ MultiLine2d makeSwaths(const Ring2d& region, const MergeRegionGroup& mergeGroup,
     // line would be directly on it, we don't flag them as outside it
     const auto bbox = [&] {
         auto tmp = bg::return_envelope<Box2d>(region);
-        bg::subtract_point(tmp.min_corner(), Point2d {1, 1});
-        bg::add_point(tmp.max_corner(), Point2d {1, 1});
+        bg::subtract_point(tmp.min_corner(), Point2d{1, 1});
+        bg::add_point(tmp.max_corner(), Point2d{1, 1});
         return tmp;
     }();
 
@@ -104,12 +103,12 @@ MultiLine2d makeSwaths(const Ring2d& region, const MergeRegionGroup& mergeGroup,
     for (const auto& subregion : mergeGroup.regionsToMerge)
     {
         Ring2d subregionRing;
-        const auto firstEdge = subregion.dcelRegion->edge;
+        const auto firstEdge = subregion.dcelRegion.edge();
         auto currEdge        = firstEdge;
         do
         {
-            subregionRing.push_back(currEdge->origin->location);
-            currEdge = currEdge->next;
+            subregionRing.push_back(currEdge.origin().point());
+            currEdge = currEdge.next();
         } while (currEdge != firstEdge);
         subregionRing.push_back(subregionRing.front());
 
@@ -151,7 +150,6 @@ MultiLine2d makeSwaths(const Ring2d& region, const MergeRegionGroup& mergeGroup,
     // Find intersections between the ones for adjacent regions, and shrink them to those points
     return result;
 }
-
 }
 }
 }

@@ -2,7 +2,7 @@
 
 #include "ads/ccpp/typedefs.h"
 #include "ads/ccpp/interfaces/region-merger-if.h"
-#include "ads/ccpp/dcel.h"
+#include "ads/dcel/dcel.h"
 
 namespace ads
 {
@@ -23,9 +23,8 @@ class SwathAndRegionProducerIf
      * \return List of pairs of loop + swaths
      */
     virtual std::vector<std::pair<geometry::Ring2d, geometry::MultiLine2d>>
-    produceSwathsAndRegions(const DoublyConnectedEdgeList& dcel, const std::vector<region_merger::MergeRegionGroup>& mergeGroups) = 0;
+    produceSwathsAndRegions(const Dcel& dcel, const std::vector<region_merger::MergeRegionGroup>& mergeGroups) = 0;
 };
-
 }
 }
 }

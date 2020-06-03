@@ -21,12 +21,12 @@ MinAcrossAngles::MinAcrossAngles(const interfaces::TurnCostCalculatorIf& turnCal
 
 template <class SumOp> SumOp for_each_segment(const geometry::Polygon2d& poly, SumOp sum)
 {
-    return boost::geometry::for_each_segment(poly, sum);
+    return boost::geometry::for_each_segment(poly, std::move(sum));
 }
 
-template <class SumOp> SumOp for_each_segment(const dcel::region_t& region, SumOp sum)
+template <class SumOp> SumOp for_each_segment(const dcel::Region region, SumOp sum)
 {
-    return dcel::for_each_segment(region, sum);
+    return region.forEachSegment(std::move(sum));
 }
 
 template <class InputShape>
@@ -61,12 +61,12 @@ std::pair<quantity::Radians, double> MinAcrossAngles::calculateOptimalDirectionA
     return optimal_direction::calculateOptimalDirectionAndCost(poly, m_increment, m_turnCalculator);
 }
 
-std::pair<quantity::Radians, double> MinAcrossAngles::calculateOptimalDirectionAndCost(const dcel::region_t& dcelRegion) const
+std::pair<quantity::Radians, double> MinAcrossAngles::calculateOptimalDirectionAndCost(const dcel::Region dcelRegion) const
 {
     return optimal_direction::calculateOptimalDirectionAndCost(dcelRegion, m_increment, m_turnCalculator);
 }
 
-double MinAcrossAngles::totalCost(const dcel::region_t& dcelRegion, quantity::Radians direction) const
+double MinAcrossAngles::totalCost(const dcel::Region dcelRegion, quantity::Radians direction) const
 {
     return optimal_direction::cost(dcelRegion, direction, m_turnCalculator);
 }
@@ -76,7 +76,6 @@ double MinAcrossAngles::edgeCost(const geometry::Point2d& p1, const geometry::Po
     const geometry::ConstReferringSegment2d segment(p1, p2);
     return m_turnCalculator.calculateTurnCost(segment, direction);
 }
-
 }
 }
 }

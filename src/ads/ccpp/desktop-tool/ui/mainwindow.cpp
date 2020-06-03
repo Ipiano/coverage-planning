@@ -9,7 +9,7 @@
 #include "ads/ccpp/swath-and-region-producer/swath-and-region-producer.h"
 
 #include "ads/ccpp/desktop-tool/coordinate-transform.h"
-#include "ads/ccpp/dcel.h"
+#include "ads/dcel/dcel.h"
 
 #include <QDebug>
 #include <QFileDialog>
@@ -48,7 +48,7 @@ template <class PointT> QPointF scenePoint(const PointT& p);
 QGraphicsItem* drawItem(const ccpp::geometry::Polygon2d& poly, double borderWidth);
 QGraphicsItem* drawItem(const ccpp::geometry::Ring2d& ring, double borderWidth);
 QGraphicsItem* drawArrow(const ccpp::geometry::Point2d& origin, const double& length, const quantity::Radians& angle, const double width);
-QGraphicsItem* drawRegions(const ccpp::DoublyConnectedEdgeList& dcel, double borderWidth);
+QGraphicsItem* drawRegions(const Dcel& dcel, double borderWidth);
 std::array<QGraphicsItem*, 2>
 drawMergedRegions(const std::vector<std::pair<ccpp::geometry::Ring2d, ccpp::geometry::MultiLine2d>>& regionGroups, double borderWidth);
 //QGraphicsItem* createSweepPath(const std::vector<const dcel::const_half_edge_t*> edges);
@@ -232,14 +232,14 @@ void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::degree>& shapeDegree
     {
         const auto tolerance = m_ui->spinBox_tolerance->value() * units::Degree;
         ccpp::polygon_decomposer::ModifiedTrapezoidal decomposer(tolerance);
-        const auto dcel = decomposer.decomposePolygon(adjustedShapeXY);
+        auto dcel = decomposer.decomposePolygon(adjustedShapeXY);
 
         ccpp::RegionMerger merger(dirCalculator);
         auto regionGroups = merger.mergeRegions(dcel);
 
         bool valid;
         std::string err;
-        std::tie(valid, err) = ccpp::dcel::is_valid(dcel);
+        std::tie(valid, err) = dcel.isValid();
         if (!valid)
             throw std::runtime_error(err);
 
@@ -247,12 +247,12 @@ void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::degree>& shapeDegree
 
         // Produce fake regions to get swaths the optimal directions
         std::vector<ccpp::interfaces::region_merger::MergeRegionGroup> singleRegionGroups;
-        for (const auto& regionPtr : dcel.regions)
+        for (const auto regionHandle : dcel.regions())
         {
             ccpp::interfaces::region_merger::MergeRegion region;
-            region.dcelRegion = regionPtr.get();
+            region.dcelRegion = regionHandle;
 
-            const auto dirCost = dirCalculator.calculateOptimalDirectionAndCost(*regionPtr);
+            const auto dirCost = dirCalculator.calculateOptimalDirectionAndCost(regionHandle);
             region.swathDir    = dirCost.first;
 
             singleRegionGroups.push_back({{region}});
@@ -261,10 +261,7 @@ void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::degree>& shapeDegree
         auto unmergedSwathsAndRegions = swather.produceSwathsAndRegions(dcel, singleRegionGroups);
         auto mergedSwathsAndRegions   = swather.produceSwathsAndRegions(dcel, regionGroups);
 
-        //Rotate back to original orientation
-        //and scale up for displaying
-        for (const auto& point : dcel.vertices)
-            bg::transform(point->location, point->location, invTransform);
+        dcel.transform(invTransform);
 
         for (auto& swathsAndRegion : mergedSwathsAndRegions)
         {
@@ -331,9 +328,9 @@ template <> QPointF scenePoint<ccpp::geometry::Point2d>(const ccpp::geometry::Po
     return {bg::get<0>(pt) * SCENE_SCALING, bg::get<1>(pt) * SCENE_SCALING};
 }
 
-template <> QPointF scenePoint<ccpp::dcel::vertex_t*>(ccpp::dcel::vertex_t* const& pt)
+template <> QPointF scenePoint<dcel::Vertex>(const dcel::Vertex& pt)
 {
-    return scenePoint(pt->location);
+    return scenePoint(pt.point());
 }
 
 QGraphicsItem* drawItem(const ccpp::geometry::Polygon2d& poly, double borderWidth)
@@ -401,16 +398,16 @@ QColor randomColor()
     return QColor(rgbDist(reng), rgbDist(reng), rgbDist(reng));
 }
 
-QGraphicsItem* drawRegion(const ccpp::dcel::region_t& region, double borderWidth)
+QGraphicsItem* drawRegion(const dcel::Region& region, double borderWidth)
 {
     QPolygonF poly;
 
-    const auto firstEdge = region.edge;
+    const auto firstEdge = region.edge();
     auto currEdge        = firstEdge;
     do
     {
-        poly.push_back(scenePoint(currEdge->origin));
-    } while ((currEdge = currEdge->next) != firstEdge);
+        poly.push_back(scenePoint(currEdge.origin()));
+    } while ((currEdge = currEdge.next()) != firstEdge);
 
     auto fill = randomColor();
     fill.setAlpha(125);
@@ -423,13 +420,13 @@ QGraphicsItem* drawRegion(const ccpp::dcel::region_t& region, double borderWidth
     return polyItem;
 }
 
-QGraphicsItem* drawRegions(const ccpp::DoublyConnectedEdgeList& dcel, double borderWidth)
+QGraphicsItem* drawRegions(const Dcel& dcel, double borderWidth)
 {
     QGraphicsItemGroup* items = new QGraphicsItemGroup;
 
-    for (const auto& region : dcel.regions)
+    for (const auto& region : dcel.regions())
     {
-        items->addToGroup(drawRegion(*region, borderWidth));
+        items->addToGroup(drawRegion(region, borderWidth));
     }
 
     return items;

@@ -18,9 +18,9 @@ class MinAcrossAngles : public interfaces::OptimalDirectionCalculatorIf
     MinAcrossAngles(const interfaces::TurnCostCalculatorIf& turnCalculator, const quantity::Degrees increment = 1 * units::Degree);
 
     std::pair<quantity::Radians, double> calculateOptimalDirectionAndCost(const geometry::Polygon2d& poly) const override;
-    std::pair<quantity::Radians, double> calculateOptimalDirectionAndCost(const dcel::region_t& dcelRegion) const override;
+    std::pair<quantity::Radians, double> calculateOptimalDirectionAndCost(const dcel::Region dcelRegion) const override;
     double edgeCost(const geometry::Point2d& p1, const geometry::Point2d& p2, quantity::Radians direction) const override;
-    double totalCost(const dcel::region_t& dcelRegion, quantity::Radians direction) const override;
+    double totalCost(const dcel::Region dcelRegion, quantity::Radians direction) const override;
 
   private:
     quantity::Radians m_increment;

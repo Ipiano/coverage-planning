@@ -37,12 +37,12 @@ struct DcelDescription
 // GTest checker that a DCEL object is valid. Meaning it does not
 // reference pointers outside itself, and it does not do anything
 // logically incorrect (e.g., adjacent edges don't have same region)
-AssertionResult DcelIsValid(const DoublyConnectedEdgeList& dcel)
+AssertionResult DcelIsValid(const Dcel& dcel)
 {
     bool isValid;
     std::string errMsg;
 
-    std::tie(isValid, errMsg) = ccpp::dcel::is_valid(dcel);
+    std::tie(isValid, errMsg) = dcel.isValid();
 
     return isValid ? AssertionSuccess() : AssertionFailure() << errMsg;
 }
@@ -50,7 +50,7 @@ AssertionResult DcelIsValid(const DoublyConnectedEdgeList& dcel)
 // GTest checker that a DCEL has a specific structure, meaning
 // that it has the expected regions and that each region has the expected
 // set of points in the correct order
-AssertionResult DcelHasRegion(const DoublyConnectedEdgeList& dcel, const std::vector<geometry::Point2d>& expectedRegion)
+AssertionResult DcelHasRegion(const Dcel& dcel, const std::vector<geometry::Point2d>& expectedRegion)
 {
     if (expectedRegion.empty())
         return AssertionFailure() << "dcel description contains empty region";
@@ -58,19 +58,19 @@ AssertionResult DcelHasRegion(const DoublyConnectedEdgeList& dcel, const std::ve
     int bestCase           = 0;
     AssertionResult result = AssertionFailure();
 
-    for (const auto& resultRegion : dcel.regions)
+    for (const auto& resultRegion : dcel.regions())
     {
-        bool foundStart         = false;
-        dcel::half_edge_t* edge = resultRegion->edge;
+        bool foundStart     = false;
+        dcel::HalfEdge edge = resultRegion.edge();
 
         do
         {
-            if (same(edge->origin->location, expectedRegion.front()))
+            if (same(edge.origin().point(), expectedRegion.front()))
             {
                 foundStart = true;
                 break;
             }
-        } while ((edge = edge->next) != resultRegion->edge);
+        } while ((edge = edge.next()) != resultRegion.edge());
 
         if (!foundStart)
         {
@@ -82,27 +82,27 @@ AssertionResult DcelHasRegion(const DoublyConnectedEdgeList& dcel, const std::ve
             continue;
         }
 
-        const dcel::half_edge_t* const firstEdge = edge;
-        unsigned int matched                     = 0;
-        auto expectedPointIt                     = expectedRegion.begin();
+        const dcel::HalfEdge firstEdge = edge;
+        unsigned int matched           = 0;
+        auto expectedPointIt           = expectedRegion.begin();
 
         bool matchedAllPoints = true;
         do
         {
-            if (!same(edge->origin->location, *expectedPointIt))
+            if (!same(edge.origin().point(), *expectedPointIt))
             {
                 if (bestCase < 2)
                 {
                     bestCase = 2;
                     result   = AssertionFailure()
                              << "point " << std::distance(expectedRegion.begin(), expectedPointIt) << " does not match :: "
-                             << "got " << to_string(edge->origin->location) << " expected " << to_string(*expectedPointIt);
+                             << "got " << to_string(edge.origin().point()) << " expected " << to_string(*expectedPointIt);
                 }
                 matchedAllPoints = false;
                 break;
             }
             matched++;
-        } while ((edge = edge->next) != firstEdge && ++expectedPointIt != expectedRegion.end());
+        } while ((edge = edge.next()) != firstEdge && ++expectedPointIt != expectedRegion.end());
 
         if (!matchedAllPoints)
             continue;
@@ -122,7 +122,7 @@ AssertionResult DcelHasRegion(const DoublyConnectedEdgeList& dcel, const std::ve
             do
             {
                 matched++;
-            } while ((edge = edge->next) != firstEdge);
+            } while ((edge = edge.next()) != firstEdge);
 
             if (bestCase < 3)
             {
@@ -137,10 +137,11 @@ AssertionResult DcelHasRegion(const DoublyConnectedEdgeList& dcel, const std::ve
     return result;
 }
 
-AssertionResult DcelMatchesDescription(const DoublyConnectedEdgeList& dcel, const DcelDescription& description)
+AssertionResult DcelMatchesDescription(const Dcel& dcel, const DcelDescription& description)
 {
-    if (dcel.regions.size() != description.regions.size())
-        return AssertionFailure() << "dcel contains wrong number of regions :: got" << dcel.regions.size() << " expected "
+    const auto dcelRegions = dcel.regions().size();
+    if (dcelRegions != description.regions.size())
+        return AssertionFailure() << "dcel contains wrong number of regions :: got" << dcelRegions << " expected "
                                   << description.regions.size();
 
     for (size_t i = 0; i < description.regions.size(); i++)
@@ -179,15 +180,15 @@ TEST_P(ModifiedTrapezoidalPolygonDecomposition, ProducesCorrectDcel)
     ASSERT_TRUE(DcelIsValid(dcel));
 
     std::cerr << "Regions identified:" << std::endl;
-    for (const auto& region : dcel.regions)
+    for (const auto& region : dcel.regions())
     {
         std::cerr << "\t";
-        const auto first = region->edge;
+        const auto first = region.edge();
         auto curr        = first;
         do
         {
-            std::cerr << to_string(curr->origin->location) << " ";
-            curr = curr->next;
+            std::cerr << to_string(curr.origin().point()) << " ";
+            curr = curr.next();
         } while (curr != first);
         std::cerr << std::endl;
     }
@@ -276,7 +277,7 @@ bg::model::multi_point<geometry::Point2d> intersection(const geometry::Segment2d
 
 const std::pair<geometry::Point2d, geometry::Point2d> verticalIntersectionsAt(const geometry::Point2d& target, const geometry::Ring2d& loop)
 {
-    const geometry::Segment2d verticalLine {{target.x(), 100}, {target.x(), -100}};
+    const geometry::Segment2d verticalLine{{target.x(), 100}, {target.x(), -100}};
 
     auto intersections = intersection(verticalLine, loop);
 
@@ -407,13 +408,15 @@ const std::vector<PolygonAndDcel> permuteCompositions(const std::vector<geometry
     for (auto outer : shapes)
     {
         bg::correct(outer);
+
+        cases.push_back(exteriorLoopCase(outer));
+        cases.push_back(exteriorLoopCase(addColinearities(outer)));
+
         int j = 0;
         for (auto inner : shapes)
         {
             bg::correct(inner);
 
-            cases.push_back(exteriorLoopCase(outer));
-            cases.push_back(exteriorLoopCase(addColinearities(outer)));
             cases.push_back(singleHoleCase(outer, inner, false, false));
             cases.push_back(singleHoleCase(outer, inner, true, false));
             cases.push_back(singleHoleCase(outer, inner, false, true));
@@ -434,53 +437,53 @@ INSTANTIATE_TEST_SUITE_P(
     CCPPTests_Covexities_Outer_Left, ModifiedTrapezoidalPolygonDecomposition,
     Values(
         // One single-point convexity on opening side of outer loop
-        PolygonAndDcel {{{{3, 0}, {3, 3}, {0, 5}, {3, 7}, {3, 10}, {10, 10}, {10, 0}}},
-                        {{{{3, 0}, {3, 3}, {0, 5}, {3, 7}, {3, 10}, {10, 10}, {10, 0}}}}},
+        PolygonAndDcel{{{{3, 0}, {3, 3}, {0, 5}, {3, 7}, {3, 10}, {10, 10}, {10, 0}}},
+                       {{{{3, 0}, {3, 3}, {0, 5}, {3, 7}, {3, 10}, {10, 10}, {10, 0}}}}},
 
         // One multi-point convexity on opening side of outer loop
-        PolygonAndDcel {{{{3, 0}, {3, 2}, {2, 3}, {1, 5}, {2, 7}, {3, 8}, {3, 10}, {10, 10}, {10, 0}}},
-                        {{{{3, 0}, {3, 2}, {2, 3}, {1, 5}, {2, 7}, {3, 8}, {3, 10}, {10, 10}, {10, 0}}}}},
+        PolygonAndDcel{{{{3, 0}, {3, 2}, {2, 3}, {1, 5}, {2, 7}, {3, 8}, {3, 10}, {10, 10}, {10, 0}}},
+                       {{{{3, 0}, {3, 2}, {2, 3}, {1, 5}, {2, 7}, {3, 8}, {3, 10}, {10, 10}, {10, 0}}}}},
 
         // One single-point convexity as the opening side of outer loop
-        PolygonAndDcel {{{{3, 0}, {0, 5}, {3, 10}, {10, 10}, {10, 0}}}, {{{{3, 0}, {0, 5}, {3, 10}, {10, 10}, {10, 0}}}}},
+        PolygonAndDcel{{{{3, 0}, {0, 5}, {3, 10}, {10, 10}, {10, 0}}}, {{{{3, 0}, {0, 5}, {3, 10}, {10, 10}, {10, 0}}}}},
 
         // One multi-point convexity as the opening side of outer loop
-        PolygonAndDcel {{{{3, 0}, {1, 1}, {0, 5}, {1, 9}, {3, 10}, {10, 10}, {10, 0}}},
-                        {{{{3, 0}, {1, 1}, {0, 5}, {1, 9}, {3, 10}, {10, 10}, {10, 0}}}}},
+        PolygonAndDcel{{{{3, 0}, {1, 1}, {0, 5}, {1, 9}, {3, 10}, {10, 10}, {10, 0}}},
+                       {{{{3, 0}, {1, 1}, {0, 5}, {1, 9}, {3, 10}, {10, 10}, {10, 0}}}}},
 
         // Two single-point convexities on opening side of outer loop
-        PolygonAndDcel {
+        PolygonAndDcel{
             {{{3, 0}, {3, 2}, {0, 3}, {3, 4}, {3, 6}, {0, 7}, {3, 8}, {3, 10}, {10, 10}, {10, 0}}},
             {{{{3, 2}, {0, 3}, {3, 4}}, {{3, 6}, {0, 7}, {3, 8}}, {{3, 0}, {3, 2}, {3, 4}, {3, 6}, {3, 8}, {3, 10}, {10, 10}, {10, 0}}}}},
 
         // Two multi-point convexities on opening side of outer loop
-        PolygonAndDcel {{{{3, 0},
-                          {3, 2},
-                          {2, 2.25},
-                          {0, 3},
-                          {2, 3.75},
-                          {3, 4},
-                          {3, 6},
-                          {2, 6.25},
-                          {0, 7},
-                          {2, 7.75},
-                          {3, 8},
-                          {3, 10},
-                          {10, 10},
-                          {10, 0}}},
-                        {{{{3, 2}, {2, 2.25}, {0, 3}, {2, 3.75}, {3, 4}},
-                          {{3, 6}, {2, 6.25}, {0, 7}, {2, 7.75}, {3, 8}},
-                          {{3, 0}, {3, 2}, {3, 4}, {3, 6}, {3, 8}, {3, 10}, {10, 10}, {10, 0}}}}},
+        PolygonAndDcel{{{{3, 0},
+                         {3, 2},
+                         {2, 2.25},
+                         {0, 3},
+                         {2, 3.75},
+                         {3, 4},
+                         {3, 6},
+                         {2, 6.25},
+                         {0, 7},
+                         {2, 7.75},
+                         {3, 8},
+                         {3, 10},
+                         {10, 10},
+                         {10, 0}}},
+                       {{{{3, 2}, {2, 2.25}, {0, 3}, {2, 3.75}, {3, 4}},
+                         {{3, 6}, {2, 6.25}, {0, 7}, {2, 7.75}, {3, 8}},
+                         {{3, 0}, {3, 2}, {3, 4}, {3, 6}, {3, 8}, {3, 10}, {10, 10}, {10, 0}}}}},
 
         // Two single-point convexities as the opening side of outer loop
-        PolygonAndDcel {{{{3, 0}, {1, 3}, {3, 5}, {1, 7}, {3, 10}, {10, 10}, {10, 0}}},
-                        {{{{3, 0}, {1, 3}, {3, 5}}, {{3, 5}, {1, 7}, {3, 10}}, {{3, 0}, {3, 5}, {3, 10}, {10, 10}, {10, 0}}}}},
+        PolygonAndDcel{{{{3, 0}, {1, 3}, {3, 5}, {1, 7}, {3, 10}, {10, 10}, {10, 0}}},
+                       {{{{3, 0}, {1, 3}, {3, 5}}, {{3, 5}, {1, 7}, {3, 10}}, {{3, 0}, {3, 5}, {3, 10}, {10, 10}, {10, 0}}}}},
 
         // Two multi-point convexities as the opening side of outer loop
-        PolygonAndDcel {{{{3, 0}, {2, 1}, {1, 3}, {2, 3.75}, {3, 5}, {2, 5.25}, {1, 7}, {2, 9}, {3, 10}, {10, 10}, {10, 0}}},
-                        {{{{3, 0}, {2, 1}, {1, 3}, {2, 3.75}, {3, 5}},
-                          {{3, 5}, {2, 5.25}, {1, 7}, {2, 9}, {3, 10}},
-                          {{3, 10}, {10, 10}, {10, 0}, {3, 0}, {3, 5}}}}}
+        PolygonAndDcel{{{{3, 0}, {2, 1}, {1, 3}, {2, 3.75}, {3, 5}, {2, 5.25}, {1, 7}, {2, 9}, {3, 10}, {10, 10}, {10, 0}}},
+                       {{{{3, 0}, {2, 1}, {1, 3}, {2, 3.75}, {3, 5}},
+                         {{3, 5}, {2, 5.25}, {1, 7}, {2, 9}, {3, 10}},
+                         {{3, 10}, {10, 10}, {10, 0}, {3, 0}, {3, 5}}}}}
 
         ));
 
@@ -489,14 +492,14 @@ INSTANTIATE_TEST_SUITE_P(
     CCPPTests_Convexities_Inner_Left, ModifiedTrapezoidalPolygonDecomposition,
     Values(
         // One single-point convexity on opening side of inner loop
-        PolygonAndDcel {{{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{4, 2}, {4, 4}, {3, 5}, {4, 6}, {4, 8}, {8, 8}, {8, 2}}}},
-                        {{{{0, 0}, {0, 10}, {3, 10}, {3, 5}, {3, 0}},
-                          {{3, 10}, {8, 10}, {8, 8}, {4, 8}, {4, 6}, {3, 5}},
-                          {{3, 0}, {3, 5}, {4, 4}, {4, 2}, {8, 2}, {8, 0}},
-                          {{8, 0}, {8, 2}, {8, 8}, {8, 10}, {10, 10}, {10, 0}}}}},
+        PolygonAndDcel{{{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{4, 2}, {4, 4}, {3, 5}, {4, 6}, {4, 8}, {8, 8}, {8, 2}}}},
+                       {{{{0, 0}, {0, 10}, {3, 10}, {3, 5}, {3, 0}},
+                         {{3, 10}, {8, 10}, {8, 8}, {4, 8}, {4, 6}, {3, 5}},
+                         {{3, 0}, {3, 5}, {4, 4}, {4, 2}, {8, 2}, {8, 0}},
+                         {{8, 0}, {8, 2}, {8, 8}, {8, 10}, {10, 10}, {10, 0}}}}},
 
         // One multi-point convexity on opening side of inner loop
-        PolygonAndDcel {
+        PolygonAndDcel{
             {{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{4, 2}, {4, 4}, {3, 4.25}, {2, 5}, {3, 5.75}, {4, 6}, {4, 8}, {8, 8}, {8, 2}}}},
             {{{{0, 0}, {0, 10}, {2, 10}, {2, 5}, {2, 0}},
               {{2, 10}, {8, 10}, {8, 8}, {4, 8}, {4, 6}, {3, 5.75}, {2, 5}},
@@ -504,21 +507,21 @@ INSTANTIATE_TEST_SUITE_P(
               {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
 
         // One single-point convexity as the opening side of inner loop
-        PolygonAndDcel {{{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{4, 2}, {3, 5}, {4, 8}, {8, 8}, {8, 2}}}},
-                        {{{{0, 0}, {0, 10}, {3, 10}, {3, 5}, {3, 0}},
-                          {{3, 5}, {3, 10}, {8, 10}, {8, 8}, {4, 8}},
-                          {{3, 5}, {4, 2}, {8, 2}, {8, 0}, {3, 0}},
-                          {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
+        PolygonAndDcel{{{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{4, 2}, {3, 5}, {4, 8}, {8, 8}, {8, 2}}}},
+                       {{{{0, 0}, {0, 10}, {3, 10}, {3, 5}, {3, 0}},
+                         {{3, 5}, {3, 10}, {8, 10}, {8, 8}, {4, 8}},
+                         {{3, 5}, {4, 2}, {8, 2}, {8, 0}, {3, 0}},
+                         {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
 
         // One multi-point convexity as the opening side of inner loop
-        PolygonAndDcel {{{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{4, 2}, {3, 3}, {2, 5}, {3, 7}, {4, 8}, {8, 8}, {8, 2}}}},
-                        {{{{0, 0}, {0, 10}, {2, 10}, {2, 5}, {2, 0}},
-                          {{2, 5}, {2, 10}, {8, 10}, {8, 8}, {4, 8}, {3, 7}},
-                          {{2, 5}, {3, 3}, {4, 2}, {8, 2}, {8, 0}, {2, 0}},
-                          {{8, 8}, {8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}}}}},
+        PolygonAndDcel{{{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{4, 2}, {3, 3}, {2, 5}, {3, 7}, {4, 8}, {8, 8}, {8, 2}}}},
+                       {{{{0, 0}, {0, 10}, {2, 10}, {2, 5}, {2, 0}},
+                         {{2, 5}, {2, 10}, {8, 10}, {8, 8}, {4, 8}, {3, 7}},
+                         {{2, 5}, {3, 3}, {4, 2}, {8, 2}, {8, 0}, {2, 0}},
+                         {{8, 8}, {8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}}}}},
 
         // Two single-point convexities on opening side of inner loop
-        PolygonAndDcel {
+        PolygonAndDcel{
             {{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{4, 2}, {4, 3}, {3, 3.5}, {4, 4}, {4, 6}, {3, 6.5}, {4, 7}, {4, 8}, {8, 8}, {8, 2}}}},
             {{{{0, 0}, {0, 10}, {3, 10}, {3, 6.5}, {3, 3.5}, {3, 0}},
               {{3, 6.5}, {4, 6}, {4, 4}, {3, 3.5}},
@@ -527,43 +530,43 @@ INSTANTIATE_TEST_SUITE_P(
               {{8, 0}, {8, 2}, {8, 8}, {8, 10}, {10, 10}, {10, 0}}}}},
 
         // Two multi-point convexities on opening side of inner loop
-        PolygonAndDcel {{{{0, 0}, {0, 10}, {10, 10}, {10, 0}},
-                         {{{4, 2},
-                           {4, 3},
-                           {3.75, 3.25},
-                           {2, 3.5},
-                           {3.75, 3.75},
-                           {4, 4},
-                           {4, 6},
-                           {3.75, 6.25},
-                           {2, 6.5},
-                           {3.75, 6.75},
-                           {4, 7},
-                           {4, 8},
-                           {8, 8},
-                           {8, 2}}}},
-                        {{{{0, 0}, {0, 10}, {2, 10}, {2, 6.5}, {2, 3.5}, {2, 0}},
-                          {{2, 3.5}, {2, 6.5}, {3.75, 6.25}, {4, 6}, {4, 4}, {3.75, 3.75}},
-                          {{2, 6.5}, {2, 10}, {8, 10}, {8, 8}, {4, 8}, {4, 7}, {3.75, 6.75}},
-                          {{2, 3.5}, {3.75, 3.25}, {4, 3}, {4, 2}, {8, 2}, {8, 0}, {2, 0}},
-                          {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
+        PolygonAndDcel{{{{0, 0}, {0, 10}, {10, 10}, {10, 0}},
+                        {{{4, 2},
+                          {4, 3},
+                          {3.75, 3.25},
+                          {2, 3.5},
+                          {3.75, 3.75},
+                          {4, 4},
+                          {4, 6},
+                          {3.75, 6.25},
+                          {2, 6.5},
+                          {3.75, 6.75},
+                          {4, 7},
+                          {4, 8},
+                          {8, 8},
+                          {8, 2}}}},
+                       {{{{0, 0}, {0, 10}, {2, 10}, {2, 6.5}, {2, 3.5}, {2, 0}},
+                         {{2, 3.5}, {2, 6.5}, {3.75, 6.25}, {4, 6}, {4, 4}, {3.75, 3.75}},
+                         {{2, 6.5}, {2, 10}, {8, 10}, {8, 8}, {4, 8}, {4, 7}, {3.75, 6.75}},
+                         {{2, 3.5}, {3.75, 3.25}, {4, 3}, {4, 2}, {8, 2}, {8, 0}, {2, 0}},
+                         {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
 
         // Two single-point convexities as the opening side of inner loop
-        PolygonAndDcel {{{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{4, 2}, {3, 4}, {4, 5}, {3, 6}, {4, 8}, {8, 8}, {8, 2}}}},
-                        {{{{0, 0}, {0, 10}, {3, 10}, {3, 6}, {3, 4}, {3, 0}},
-                          {{3, 6}, {4, 5}, {3, 4}},
-                          {{3, 6}, {3, 10}, {8, 10}, {8, 8}, {4, 8}},
-                          {{3, 4}, {4, 2}, {8, 2}, {8, 0}, {3, 0}},
-                          {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
+        PolygonAndDcel{{{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{4, 2}, {3, 4}, {4, 5}, {3, 6}, {4, 8}, {8, 8}, {8, 2}}}},
+                       {{{{0, 0}, {0, 10}, {3, 10}, {3, 6}, {3, 4}, {3, 0}},
+                         {{3, 6}, {4, 5}, {3, 4}},
+                         {{3, 6}, {3, 10}, {8, 10}, {8, 8}, {4, 8}},
+                         {{3, 4}, {4, 2}, {8, 2}, {8, 0}, {3, 0}},
+                         {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
 
         // Two multi-point convexities as the opening side of inner loop
-        PolygonAndDcel {{{{0, 0}, {0, 10}, {10, 10}, {10, 0}},
-                         {{{4, 2}, {3, 2.5}, {2, 4}, {3, 4.75}, {4, 5}, {3, 5.25}, {2, 6}, {3, 7.5}, {4, 8}, {8, 8}, {8, 2}}}},
-                        {{{{0, 0}, {0, 10}, {2, 10}, {2, 6}, {2, 4}, {2, 0}},
-                          {{2, 4}, {2, 6}, {3, 5.25}, {4, 5}, {3, 4.75}},
-                          {{2, 4}, {3, 2.5}, {4, 2}, {8, 2}, {8, 0}, {2, 0}},
-                          {{2, 6}, {2, 10}, {8, 10}, {8, 8}, {4, 8}, {3, 7.5}},
-                          {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}}
+        PolygonAndDcel{{{{0, 0}, {0, 10}, {10, 10}, {10, 0}},
+                        {{{4, 2}, {3, 2.5}, {2, 4}, {3, 4.75}, {4, 5}, {3, 5.25}, {2, 6}, {3, 7.5}, {4, 8}, {8, 8}, {8, 2}}}},
+                       {{{{0, 0}, {0, 10}, {2, 10}, {2, 6}, {2, 4}, {2, 0}},
+                         {{2, 4}, {2, 6}, {3, 5.25}, {4, 5}, {3, 4.75}},
+                         {{2, 4}, {3, 2.5}, {4, 2}, {8, 2}, {8, 0}, {2, 0}},
+                         {{2, 6}, {2, 10}, {8, 10}, {8, 8}, {4, 8}, {3, 7.5}},
+                         {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}}
 
         ));
 
@@ -572,52 +575,52 @@ INSTANTIATE_TEST_SUITE_P(
     CCPPTests_Covexities_Outer_Right, ModifiedTrapezoidalPolygonDecomposition,
     Values(
         // One single-point convexity on closing side of outer loop
-        PolygonAndDcel {{{{-3, 0}, {-3, -3}, {0, -5}, {-3, -7}, {-3, -10}, {-10, -10}, {-10, 0}}},
-                        {{{{-3, 0}, {-3, -3}, {0, -5}, {-3, -7}, {-3, -10}, {-10, -10}, {-10, 0}}}}},
+        PolygonAndDcel{{{{-3, 0}, {-3, -3}, {0, -5}, {-3, -7}, {-3, -10}, {-10, -10}, {-10, 0}}},
+                       {{{{-3, 0}, {-3, -3}, {0, -5}, {-3, -7}, {-3, -10}, {-10, -10}, {-10, 0}}}}},
 
         // One multi-point convexity on closing side of outer loop
-        PolygonAndDcel {{{{-3, 0}, {-3, -2}, {-2, -3}, {-1, -5}, {-2, -7}, {-3, -8}, {-3, -10}, {-10, -10}, {-10, 0}}},
-                        {{{{-3, 0}, {-3, -2}, {-2, -3}, {-1, -5}, {-2, -7}, {-3, -8}, {-3, -10}, {-10, -10}, {-10, 0}}}}},
+        PolygonAndDcel{{{{-3, 0}, {-3, -2}, {-2, -3}, {-1, -5}, {-2, -7}, {-3, -8}, {-3, -10}, {-10, -10}, {-10, 0}}},
+                       {{{{-3, 0}, {-3, -2}, {-2, -3}, {-1, -5}, {-2, -7}, {-3, -8}, {-3, -10}, {-10, -10}, {-10, 0}}}}},
 
         // One single-point convexity as the closing side of outer loop
-        PolygonAndDcel {{{{-3, 0}, {0, -5}, {-3, -10}, {-10, -10}, {-10, 0}}}, {{{{-3, 0}, {0, -5}, {-3, -10}, {-10, -10}, {-10, 0}}}}},
+        PolygonAndDcel{{{{-3, 0}, {0, -5}, {-3, -10}, {-10, -10}, {-10, 0}}}, {{{{-3, 0}, {0, -5}, {-3, -10}, {-10, -10}, {-10, 0}}}}},
 
         // One multi-point convexity as the closing side of outer loop
-        PolygonAndDcel {{{{-3, 0}, {-1, -1}, {0, -5}, {-1, -9}, {-3, -10}, {-10, -10}, {-10, 0}}},
-                        {{{{-3, 0}, {-1, -1}, {0, -5}, {-1, -9}, {-3, -10}, {-10, -10}, {-10, 0}}}}},
+        PolygonAndDcel{{{{-3, 0}, {-1, -1}, {0, -5}, {-1, -9}, {-3, -10}, {-10, -10}, {-10, 0}}},
+                       {{{{-3, 0}, {-1, -1}, {0, -5}, {-1, -9}, {-3, -10}, {-10, -10}, {-10, 0}}}}},
 
         // Two single-point convexities on closing side of outer loop
-        PolygonAndDcel {{{{-3, 0}, {-3, -2}, {0, -3}, {-3, -4}, {-3, -6}, {0, -7}, {-3, -8}, {-3, -10}, {-10, -10}, {-10, 0}}},
-                        {{{{-3, -2}, {0, -3}, {-3, -4}},
-                          {{-3, -6}, {0, -7}, {-3, -8}},
-                          {{-3, 0}, {-3, -2}, {-3, -4}, {-3, -6}, {-3, -8}, {-3, -10}, {-10, -10}, {-10, 0}}}}},
+        PolygonAndDcel{{{{-3, 0}, {-3, -2}, {0, -3}, {-3, -4}, {-3, -6}, {0, -7}, {-3, -8}, {-3, -10}, {-10, -10}, {-10, 0}}},
+                       {{{{-3, -2}, {0, -3}, {-3, -4}},
+                         {{-3, -6}, {0, -7}, {-3, -8}},
+                         {{-3, 0}, {-3, -2}, {-3, -4}, {-3, -6}, {-3, -8}, {-3, -10}, {-10, -10}, {-10, 0}}}}},
 
         // Two multi-point convexities on closing side of outer loop
-        PolygonAndDcel {{{{-3, 0},
-                          {-3, -2},
-                          {-2, -2.25},
-                          {0, -3},
-                          {-2, -3.75},
-                          {-3, -4},
-                          {-3, -6},
-                          {-2, -6.25},
-                          {0, -7},
-                          {-2, -7.75},
-                          {-3, -8},
-                          {-3, -10},
-                          {-10, -10},
-                          {-10, 0}}},
-                        {{{{-3, -2}, {-2, -2.25}, {0, -3}, {-2, -3.75}, {-3, -4}},
-                          {{-3, -6}, {-2, -6.25}, {0, -7}, {-2, -7.75}, {-3, -8}},
-                          {{-3, 0}, {-3, -2}, {-3, -4}, {-3, -6}, {-3, -8}, {-3, -10}, {-10, -10}, {-10, 0}}}}},
+        PolygonAndDcel{{{{-3, 0},
+                         {-3, -2},
+                         {-2, -2.25},
+                         {0, -3},
+                         {-2, -3.75},
+                         {-3, -4},
+                         {-3, -6},
+                         {-2, -6.25},
+                         {0, -7},
+                         {-2, -7.75},
+                         {-3, -8},
+                         {-3, -10},
+                         {-10, -10},
+                         {-10, 0}}},
+                       {{{{-3, -2}, {-2, -2.25}, {0, -3}, {-2, -3.75}, {-3, -4}},
+                         {{-3, -6}, {-2, -6.25}, {0, -7}, {-2, -7.75}, {-3, -8}},
+                         {{-3, 0}, {-3, -2}, {-3, -4}, {-3, -6}, {-3, -8}, {-3, -10}, {-10, -10}, {-10, 0}}}}},
 
         // Two single-point convexities as the closing side of outer loop
-        PolygonAndDcel {
+        PolygonAndDcel{
             {{{-3, 0}, {-1, -3}, {-3, -5}, {-1, -7}, {-3, -10}, {-10, -10}, {-10, 0}}},
             {{{{-3, 0}, {-1, -3}, {-3, -5}}, {{-3, -5}, {-1, -7}, {-3, -10}}, {{-3, 0}, {-3, -5}, {-3, -10}, {-10, -10}, {-10, 0}}}}},
 
         // Two multi-point convexities as the closing side of outer loop
-        PolygonAndDcel {
+        PolygonAndDcel{
             {{{-3, 0}, {-2, -1}, {-1, -3}, {-2, -3.75}, {-3, -5}, {-2, -5.25}, {-1, -7}, {-2, -9}, {-3, -10}, {-10, -10}, {-10, 0}}},
             {{{{-3, 0}, {-2, -1}, {-1, -3}, {-2, -3.75}, {-3, -5}},
               {{-3, -5}, {-2, -5.25}, {-1, -7}, {-2, -9}, {-3, -10}},
@@ -630,78 +633,75 @@ INSTANTIATE_TEST_SUITE_P(
     CCPPTests_Convexities_Inner_Right, ModifiedTrapezoidalPolygonDecomposition,
     Values(
         // One single-point convexity on closing side of inner loop
-        PolygonAndDcel {
-            {{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}}, {{{-4, -2}, {-4, -4}, {-3, -5}, {-4, -6}, {-4, -8}, {-8, -8}, {-8, -2}}}},
-            {{{{0, 0}, {0, -10}, {-3, -10}, {-3, -5}, {-3, 0}},
-              {{-3, -10}, {-8, -10}, {-8, -8}, {-4, -8}, {-4, -6}, {-3, -5}},
-              {{-3, 0}, {-3, -5}, {-4, -4}, {-4, -2}, {-8, -2}, {-8, 0}},
-              {{-8, 0}, {-8, -2}, {-8, -8}, {-8, -10}, {-10, -10}, {-10, 0}}}}},
+        PolygonAndDcel{{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}}, {{{-4, -2}, {-4, -4}, {-3, -5}, {-4, -6}, {-4, -8}, {-8, -8}, {-8, -2}}}},
+                       {{{{0, 0}, {0, -10}, {-3, -10}, {-3, -5}, {-3, 0}},
+                         {{-3, -10}, {-8, -10}, {-8, -8}, {-4, -8}, {-4, -6}, {-3, -5}},
+                         {{-3, 0}, {-3, -5}, {-4, -4}, {-4, -2}, {-8, -2}, {-8, 0}},
+                         {{-8, 0}, {-8, -2}, {-8, -8}, {-8, -10}, {-10, -10}, {-10, 0}}}}},
 
         // One multi-point convexity on closing side of inner loop
-        PolygonAndDcel {{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}},
-                         {{{-4, -2}, {-4, -4}, {-3, -4.25}, {-2, -5}, {-3, -5.75}, {-4, -6}, {-4, -8}, {-8, -8}, {-8, -2}}}},
-                        {{{{0, 0}, {0, -10}, {-2, -10}, {-2, -5}, {-2, 0}},
-                          {{-2, -10}, {-8, -10}, {-8, -8}, {-4, -8}, {-4, -6}, {-3, -5.75}, {-2, -5}},
-                          {{-2, 0}, {-2, -5}, {-3, -4.25}, {-4, -4}, {-4, -2}, {-8, -2}, {-8, 0}},
-                          {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
+        PolygonAndDcel{{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}},
+                        {{{-4, -2}, {-4, -4}, {-3, -4.25}, {-2, -5}, {-3, -5.75}, {-4, -6}, {-4, -8}, {-8, -8}, {-8, -2}}}},
+                       {{{{0, 0}, {0, -10}, {-2, -10}, {-2, -5}, {-2, 0}},
+                         {{-2, -10}, {-8, -10}, {-8, -8}, {-4, -8}, {-4, -6}, {-3, -5.75}, {-2, -5}},
+                         {{-2, 0}, {-2, -5}, {-3, -4.25}, {-4, -4}, {-4, -2}, {-8, -2}, {-8, 0}},
+                         {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
 
         // One single-point convexity as the closing side of inner loop
-        PolygonAndDcel {{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}}, {{{-4, -2}, {-3, -5}, {-4, -8}, {-8, -8}, {-8, -2}}}},
-                        {{{{0, 0}, {0, -10}, {-3, -10}, {-3, -5}, {-3, 0}},
-                          {{-3, -5}, {-3, -10}, {-8, -10}, {-8, -8}, {-4, -8}},
-                          {{-3, -5}, {-4, -2}, {-8, -2}, {-8, 0}, {-3, 0}},
-                          {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
+        PolygonAndDcel{{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}}, {{{-4, -2}, {-3, -5}, {-4, -8}, {-8, -8}, {-8, -2}}}},
+                       {{{{0, 0}, {0, -10}, {-3, -10}, {-3, -5}, {-3, 0}},
+                         {{-3, -5}, {-3, -10}, {-8, -10}, {-8, -8}, {-4, -8}},
+                         {{-3, -5}, {-4, -2}, {-8, -2}, {-8, 0}, {-3, 0}},
+                         {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
 
         // One multi-point convexity as the closing side of inner loop
-        PolygonAndDcel {
-            {{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}}, {{{-4, -2}, {-3, -3}, {-2, -5}, {-3, -7}, {-4, -8}, {-8, -8}, {-8, -2}}}},
-            {{{{0, 0}, {0, -10}, {-2, -10}, {-2, -5}, {-2, 0}},
-              {{-2, -5}, {-2, -10}, {-8, -10}, {-8, -8}, {-4, -8}, {-3, -7}},
-              {{-2, -5}, {-3, -3}, {-4, -2}, {-8, -2}, {-8, 0}, {-2, 0}},
-              {{-8, -8}, {-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}}}}},
+        PolygonAndDcel{{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}}, {{{-4, -2}, {-3, -3}, {-2, -5}, {-3, -7}, {-4, -8}, {-8, -8}, {-8, -2}}}},
+                       {{{{0, 0}, {0, -10}, {-2, -10}, {-2, -5}, {-2, 0}},
+                         {{-2, -5}, {-2, -10}, {-8, -10}, {-8, -8}, {-4, -8}, {-3, -7}},
+                         {{-2, -5}, {-3, -3}, {-4, -2}, {-8, -2}, {-8, 0}, {-2, 0}},
+                         {{-8, -8}, {-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}}}}},
 
         // Two single-point convexities on closing side of inner loop
-        PolygonAndDcel {{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}},
-                         {{{-4, -2}, {-4, -3}, {-3, -3.5}, {-4, -4}, {-4, -6}, {-3, -6.5}, {-4, -7}, {-4, -8}, {-8, -8}, {-8, -2}}}},
-                        {{{{0, 0}, {0, -10}, {-3, -10}, {-3, -6.5}, {-3, -3.5}, {-3, 0}},
-                          {{-3, -6.5}, {-4, -6}, {-4, -4}, {-3, -3.5}},
-                          {{-3, -10}, {-8, -10}, {-8, -8}, {-4, -8}, {-4, -7}, {-3, -6.5}},
-                          {{-3, 0}, {-3, -3.5}, {-4, -3}, {-4, -2}, {-8, -2}, {-8, 0}},
-                          {{-8, 0}, {-8, -2}, {-8, -8}, {-8, -10}, {-10, -10}, {-10, 0}}}}},
+        PolygonAndDcel{{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}},
+                        {{{-4, -2}, {-4, -3}, {-3, -3.5}, {-4, -4}, {-4, -6}, {-3, -6.5}, {-4, -7}, {-4, -8}, {-8, -8}, {-8, -2}}}},
+                       {{{{0, 0}, {0, -10}, {-3, -10}, {-3, -6.5}, {-3, -3.5}, {-3, 0}},
+                         {{-3, -6.5}, {-4, -6}, {-4, -4}, {-3, -3.5}},
+                         {{-3, -10}, {-8, -10}, {-8, -8}, {-4, -8}, {-4, -7}, {-3, -6.5}},
+                         {{-3, 0}, {-3, -3.5}, {-4, -3}, {-4, -2}, {-8, -2}, {-8, 0}},
+                         {{-8, 0}, {-8, -2}, {-8, -8}, {-8, -10}, {-10, -10}, {-10, 0}}}}},
 
         // Two multi-point convexities on closing side of inner loop
-        PolygonAndDcel {{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}},
-                         {{{-4, -2},
-                           {-4, -3},
-                           {-3.75, -3.25},
-                           {-2, -3.5},
-                           {-3.75, -3.75},
-                           {-4, -4},
-                           {-4, -6},
-                           {-3.75, -6.25},
-                           {-2, -6.5},
-                           {-3.75, -6.75},
-                           {-4, -7},
-                           {-4, -8},
-                           {-8, -8},
-                           {-8, -2}}}},
-                        {{{{0, 0}, {0, -10}, {-2, -10}, {-2, -6.5}, {-2, -3.5}, {-2, 0}},
-                          {{-2, -3.5}, {-2, -6.5}, {-3.75, -6.25}, {-4, -6}, {-4, -4}, {-3.75, -3.75}},
-                          {{-2, -6.5}, {-2, -10}, {-8, -10}, {-8, -8}, {-4, -8}, {-4, -7}, {-3.75, -6.75}},
-                          {{-2, -3.5}, {-3.75, -3.25}, {-4, -3}, {-4, -2}, {-8, -2}, {-8, 0}, {-2, 0}},
-                          {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
+        PolygonAndDcel{{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}},
+                        {{{-4, -2},
+                          {-4, -3},
+                          {-3.75, -3.25},
+                          {-2, -3.5},
+                          {-3.75, -3.75},
+                          {-4, -4},
+                          {-4, -6},
+                          {-3.75, -6.25},
+                          {-2, -6.5},
+                          {-3.75, -6.75},
+                          {-4, -7},
+                          {-4, -8},
+                          {-8, -8},
+                          {-8, -2}}}},
+                       {{{{0, 0}, {0, -10}, {-2, -10}, {-2, -6.5}, {-2, -3.5}, {-2, 0}},
+                         {{-2, -3.5}, {-2, -6.5}, {-3.75, -6.25}, {-4, -6}, {-4, -4}, {-3.75, -3.75}},
+                         {{-2, -6.5}, {-2, -10}, {-8, -10}, {-8, -8}, {-4, -8}, {-4, -7}, {-3.75, -6.75}},
+                         {{-2, -3.5}, {-3.75, -3.25}, {-4, -3}, {-4, -2}, {-8, -2}, {-8, 0}, {-2, 0}},
+                         {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
 
         // Two single-point convexities as the closing side of inner loop
-        PolygonAndDcel {
-            {{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}}, {{{-4, -2}, {-3, -4}, {-4, -5}, {-3, -6}, {-4, -8}, {-8, -8}, {-8, -2}}}},
-            {{{{0, 0}, {0, -10}, {-3, -10}, {-3, -6}, {-3, -4}, {-3, 0}},
-              {{-3, -6}, {-4, -5}, {-3, -4}},
-              {{-3, -6}, {-3, -10}, {-8, -10}, {-8, -8}, {-4, -8}},
-              {{-3, -4}, {-4, -2}, {-8, -2}, {-8, 0}, {-3, 0}},
-              {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
+        PolygonAndDcel{{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}}, {{{-4, -2}, {-3, -4}, {-4, -5}, {-3, -6}, {-4, -8}, {-8, -8}, {-8, -2}}}},
+                       {{{{0, 0}, {0, -10}, {-3, -10}, {-3, -6}, {-3, -4}, {-3, 0}},
+                         {{-3, -6}, {-4, -5}, {-3, -4}},
+                         {{-3, -6}, {-3, -10}, {-8, -10}, {-8, -8}, {-4, -8}},
+                         {{-3, -4}, {-4, -2}, {-8, -2}, {-8, 0}, {-3, 0}},
+                         {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
 
         // Two multi-point convexities as the closing side of inner loop
-        PolygonAndDcel {
+        PolygonAndDcel{
             {{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}},
              {{{-4, -2}, {-3, -2.5}, {-2, -4}, {-3, -4.75}, {-4, -5}, {-3, -5.25}, {-2, -6}, {-3, -7.5}, {-4, -8}, {-8, -8}, {-8, -2}}}},
             {{{{0, 0}, {0, -10}, {-2, -10}, {-2, -6}, {-2, -4}, {-2, 0}},
@@ -717,65 +717,65 @@ INSTANTIATE_TEST_SUITE_P(
     CCPPTests_Concavities_Outer_Left, ModifiedTrapezoidalPolygonDecomposition,
     Values(
         // One single-point concavity on opening side of outer loop
-        PolygonAndDcel {
+        PolygonAndDcel{
             {{{0, 0}, {0, 3}, {2, 5}, {0, 7}, {0, 10}, {10, 10}, {10, 0}}},
             {{{{0, 0}, {0, 3}, {2, 5}, {2, 0}}, {{0, 7}, {0, 10}, {2, 10}, {2, 5}}, {{2, 5}, {2, 10}, {10, 10}, {10, 0}, {2, 0}}}}},
 
         // One multi-point concavity on opening side of outer loop
-        PolygonAndDcel {{{{0, 0}, {0, 2}, {1, 3}, {2, 5}, {1, 7}, {0, 8}, {0, 10}, {10, 10}, {10, 0}}},
-                        {{{{0, 0}, {0, 2}, {1, 3}, {2, 5}, {2, 0}},
-                          {{0, 8}, {0, 10}, {2, 10}, {2, 5}, {1, 7}},
-                          {{2, 5}, {2, 10}, {10, 10}, {10, 0}, {2, 0}}}}},
+        PolygonAndDcel{{{{0, 0}, {0, 2}, {1, 3}, {2, 5}, {1, 7}, {0, 8}, {0, 10}, {10, 10}, {10, 0}}},
+                       {{{{0, 0}, {0, 2}, {1, 3}, {2, 5}, {2, 0}},
+                         {{0, 8}, {0, 10}, {2, 10}, {2, 5}, {1, 7}},
+                         {{2, 5}, {2, 10}, {10, 10}, {10, 0}, {2, 0}}}}},
 
         // One single-point concavity as the opening side of outer loop
-        PolygonAndDcel {{{{0, 0}, {2, 5}, {0, 10}, {10, 10}, {10, 0}}},
-                        {{{{0, 0}, {2, 5}, {2, 0}}, {{0, 10}, {2, 10}, {2, 5}}, {{2, 5}, {2, 10}, {10, 10}, {10, 0}, {2, 0}}}}},
+        PolygonAndDcel{{{{0, 0}, {2, 5}, {0, 10}, {10, 10}, {10, 0}}},
+                       {{{{0, 0}, {2, 5}, {2, 0}}, {{0, 10}, {2, 10}, {2, 5}}, {{2, 5}, {2, 10}, {10, 10}, {10, 0}, {2, 0}}}}},
 
         // One multi-point concavity as the opening side of outer loop
-        PolygonAndDcel {
+        PolygonAndDcel{
             {{{0, 0}, {1, 1}, {2, 5}, {1, 9}, {0, 10}, {10, 10}, {10, 0}}},
             {{{{0, 0}, {1, 1}, {2, 5}, {2, 0}}, {{0, 10}, {2, 10}, {2, 5}, {1, 9}}, {{2, 5}, {2, 10}, {10, 10}, {10, 0}, {2, 0}}}}},
 
         // Two single-point concavities on opening side of outer loop
-        PolygonAndDcel {{{{0, 0}, {0, 2}, {2, 3}, {0, 4}, {0, 6}, {2, 7}, {0, 8}, {0, 10}, {10, 10}, {10, 0}}},
-                        {{{{0, 0}, {0, 2}, {2, 3}, {2, 0}},
-                          {{2, 3}, {0, 4}, {0, 6}, {2, 7}},
-                          {{0, 8}, {0, 10}, {2, 10}, {2, 7}},
-                          {{2, 3}, {2, 7}, {2, 10}, {10, 10}, {10, 0}, {2, 0}}}}},
+        PolygonAndDcel{{{{0, 0}, {0, 2}, {2, 3}, {0, 4}, {0, 6}, {2, 7}, {0, 8}, {0, 10}, {10, 10}, {10, 0}}},
+                       {{{{0, 0}, {0, 2}, {2, 3}, {2, 0}},
+                         {{2, 3}, {0, 4}, {0, 6}, {2, 7}},
+                         {{0, 8}, {0, 10}, {2, 10}, {2, 7}},
+                         {{2, 3}, {2, 7}, {2, 10}, {10, 10}, {10, 0}, {2, 0}}}}},
 
         // Two multi-point concavities on opening side of outer loop
-        PolygonAndDcel {{{{0, 0},
-                          {0, 2},
-                          {1, 2.25},
-                          {2, 3},
-                          {1, 3.75},
-                          {0, 4},
-                          {0, 6},
-                          {1, 6.25},
-                          {2, 7},
-                          {1, 7.75},
-                          {0, 8},
-                          {0, 10},
-                          {10, 10},
-                          {10, 0}}},
-                        {{{{0, 0}, {0, 2}, {1, 2.25}, {2, 3}, {2, 0}},
-                          {{2, 3}, {1, 3.75}, {0, 4}, {0, 6}, {1, 6.25}, {2, 7}},
-                          {{0, 8}, {0, 10}, {2, 10}, {2, 7}, {1, 7.75}},
-                          {{2, 3}, {2, 7}, {2, 10}, {10, 10}, {10, 0}, {2, 0}}}}},
+        PolygonAndDcel{{{{0, 0},
+                         {0, 2},
+                         {1, 2.25},
+                         {2, 3},
+                         {1, 3.75},
+                         {0, 4},
+                         {0, 6},
+                         {1, 6.25},
+                         {2, 7},
+                         {1, 7.75},
+                         {0, 8},
+                         {0, 10},
+                         {10, 10},
+                         {10, 0}}},
+                       {{{{0, 0}, {0, 2}, {1, 2.25}, {2, 3}, {2, 0}},
+                         {{2, 3}, {1, 3.75}, {0, 4}, {0, 6}, {1, 6.25}, {2, 7}},
+                         {{0, 8}, {0, 10}, {2, 10}, {2, 7}, {1, 7.75}},
+                         {{2, 3}, {2, 7}, {2, 10}, {10, 10}, {10, 0}, {2, 0}}}}},
 
         // Two single-point concavities as the opening side of outer loop
-        PolygonAndDcel {{{{0, 0}, {2, 3}, {0, 5}, {2, 7}, {0, 10}, {10, 10}, {10, 0}}},
-                        {{{{0, 0}, {2, 3}, {2, 0}},
-                          {{2, 3}, {0, 5}, {2, 7}},
-                          {{0, 10}, {2, 10}, {2, 7}},
-                          {{2, 3}, {2, 7}, {2, 10}, {10, 10}, {10, 0}, {2, 0}}}}},
+        PolygonAndDcel{{{{0, 0}, {2, 3}, {0, 5}, {2, 7}, {0, 10}, {10, 10}, {10, 0}}},
+                       {{{{0, 0}, {2, 3}, {2, 0}},
+                         {{2, 3}, {0, 5}, {2, 7}},
+                         {{0, 10}, {2, 10}, {2, 7}},
+                         {{2, 3}, {2, 7}, {2, 10}, {10, 10}, {10, 0}, {2, 0}}}}},
 
         // Two multi-point concavities as the opening side of outer loop
-        PolygonAndDcel {{{{0, 0}, {1, 1}, {2, 3}, {1, 3.75}, {0, 5}, {1, 5.25}, {2, 7}, {1, 9}, {0, 10}, {10, 10}, {10, 0}}},
-                        {{{{0, 0}, {1, 1}, {2, 3}, {2, 0}},
-                          {{2, 3}, {1, 3.75}, {0, 5}, {1, 5.25}, {2, 7}},
-                          {{0, 10}, {2, 10}, {2, 7}, {1, 9}},
-                          {{2, 3}, {2, 7}, {2, 10}, {10, 10}, {10, 0}, {2, 0}}}}}
+        PolygonAndDcel{{{{0, 0}, {1, 1}, {2, 3}, {1, 3.75}, {0, 5}, {1, 5.25}, {2, 7}, {1, 9}, {0, 10}, {10, 10}, {10, 0}}},
+                       {{{{0, 0}, {1, 1}, {2, 3}, {2, 0}},
+                         {{2, 3}, {1, 3.75}, {0, 5}, {1, 5.25}, {2, 7}},
+                         {{0, 10}, {2, 10}, {2, 7}, {1, 9}},
+                         {{2, 3}, {2, 7}, {2, 10}, {10, 10}, {10, 0}, {2, 0}}}}}
 
         ));
 
@@ -784,15 +784,15 @@ INSTANTIATE_TEST_SUITE_P(
     CCPPTests_Concavities_Inner_Left, ModifiedTrapezoidalPolygonDecomposition,
     Values(
         // One single-point concavity on opening side of inner loop
-        PolygonAndDcel {{{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{2, 2}, {2, 4}, {3, 5}, {2, 6}, {2, 8}, {8, 8}, {8, 2}}}},
-                        {{{{0, 0}, {0, 10}, {2, 10}, {2, 8}, {2, 6}, {2, 4}, {2, 2}, {2, 0}},
-                          {{2, 0}, {2, 2}, {8, 2}, {8, 0}},
-                          {{2, 4}, {2, 6}, {3, 5}},
-                          {{2, 8}, {2, 10}, {8, 10}, {8, 8}},
-                          {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
+        PolygonAndDcel{{{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{2, 2}, {2, 4}, {3, 5}, {2, 6}, {2, 8}, {8, 8}, {8, 2}}}},
+                       {{{{0, 0}, {0, 10}, {2, 10}, {2, 8}, {2, 6}, {2, 4}, {2, 2}, {2, 0}},
+                         {{2, 0}, {2, 2}, {8, 2}, {8, 0}},
+                         {{2, 4}, {2, 6}, {3, 5}},
+                         {{2, 8}, {2, 10}, {8, 10}, {8, 8}},
+                         {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
 
         // One multi-point concavity on opening side of inner loop
-        PolygonAndDcel {
+        PolygonAndDcel{
             {{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{2, 2}, {2, 4}, {2.5, 4.25}, {3, 5}, {2.5, 5.75}, {2, 6}, {2, 8}, {8, 8}, {8, 2}}}},
             {{{{0, 0}, {0, 10}, {2, 10}, {2, 8}, {2, 6}, {2, 4}, {2, 2}, {2, 0}},
               {{2, 0}, {2, 2}, {8, 2}, {8, 0}},
@@ -801,23 +801,23 @@ INSTANTIATE_TEST_SUITE_P(
               {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
 
         // One single-point concavity as the opening side of inner loop
-        PolygonAndDcel {{{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{2, 2}, {3, 5}, {2, 8}, {8, 8}, {8, 2}}}},
-                        {{{{0, 0}, {0, 10}, {2, 10}, {2, 8}, {2, 2}, {2, 0}},
-                          {{2, 0}, {2, 2}, {8, 2}, {8, 0}},
-                          {{2, 2}, {2, 8}, {3, 5}},
-                          {{2, 8}, {2, 10}, {8, 10}, {8, 8}},
-                          {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
+        PolygonAndDcel{{{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{2, 2}, {3, 5}, {2, 8}, {8, 8}, {8, 2}}}},
+                       {{{{0, 0}, {0, 10}, {2, 10}, {2, 8}, {2, 2}, {2, 0}},
+                         {{2, 0}, {2, 2}, {8, 2}, {8, 0}},
+                         {{2, 2}, {2, 8}, {3, 5}},
+                         {{2, 8}, {2, 10}, {8, 10}, {8, 8}},
+                         {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
 
         // One multi-point concavity as the opening side of inner loop
-        PolygonAndDcel {{{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{2, 2}, {3, 3}, {4, 5}, {3, 7}, {2, 8}, {8, 8}, {8, 2}}}},
-                        {{{{0, 0}, {0, 10}, {2, 10}, {2, 8}, {2, 2}, {2, 0}},
-                          {{2, 0}, {2, 2}, {8, 2}, {8, 0}},
-                          {{2, 2}, {2, 8}, {3, 7}, {4, 5}, {3, 3}},
-                          {{2, 8}, {2, 10}, {8, 10}, {8, 8}},
-                          {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
+        PolygonAndDcel{{{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{2, 2}, {3, 3}, {4, 5}, {3, 7}, {2, 8}, {8, 8}, {8, 2}}}},
+                       {{{{0, 0}, {0, 10}, {2, 10}, {2, 8}, {2, 2}, {2, 0}},
+                         {{2, 0}, {2, 2}, {8, 2}, {8, 0}},
+                         {{2, 2}, {2, 8}, {3, 7}, {4, 5}, {3, 3}},
+                         {{2, 8}, {2, 10}, {8, 10}, {8, 8}},
+                         {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
 
         // Two single-point concavities on opening side of inner loop
-        PolygonAndDcel {
+        PolygonAndDcel{
             {{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{2, 2}, {2, 3}, {3, 3.5}, {2, 4}, {2, 6}, {3, 6.5}, {2, 7}, {2, 8}, {8, 8}, {8, 2}}}},
             {{{{0, 0}, {0, 10}, {2, 10}, {2, 8}, {2, 7}, {2, 6}, {2, 4}, {2, 3}, {2, 2}, {2, 0}},
               {{2, 0}, {2, 2}, {8, 2}, {8, 0}},
@@ -827,46 +827,46 @@ INSTANTIATE_TEST_SUITE_P(
               {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
 
         // Two multi-point concavities on opening side of inner loop
-        PolygonAndDcel {{{{0, 0}, {0, 10}, {10, 10}, {10, 0}},
-                         {{{2, 2},
-                           {2, 3},
-                           {3.75, 3.25},
-                           {4, 3.5},
-                           {3.75, 3.75},
-                           {2, 4},
-                           {2, 6},
-                           {3.75, 6.25},
-                           {4, 6.5},
-                           {3.75, 6.75},
-                           {2, 7},
-                           {2, 8},
-                           {8, 8},
-                           {8, 2}}}},
-                        {{{{0, 0}, {0, 10}, {2, 10}, {2, 8}, {2, 7}, {2, 6}, {2, 4}, {2, 3}, {2, 2}, {2, 0}},
-                          {{2, 0}, {2, 2}, {8, 2}, {8, 0}},
-                          {{2, 3}, {2, 4}, {3.75, 3.75}, {4, 3.5}, {3.75, 3.25}},
-                          {{2, 6}, {2, 7}, {3.75, 6.75}, {4, 6.5}, {3.75, 6.25}},
-                          {{2, 8}, {2, 10}, {8, 10}, {8, 8}},
-                          {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
+        PolygonAndDcel{{{{0, 0}, {0, 10}, {10, 10}, {10, 0}},
+                        {{{2, 2},
+                          {2, 3},
+                          {3.75, 3.25},
+                          {4, 3.5},
+                          {3.75, 3.75},
+                          {2, 4},
+                          {2, 6},
+                          {3.75, 6.25},
+                          {4, 6.5},
+                          {3.75, 6.75},
+                          {2, 7},
+                          {2, 8},
+                          {8, 8},
+                          {8, 2}}}},
+                       {{{{0, 0}, {0, 10}, {2, 10}, {2, 8}, {2, 7}, {2, 6}, {2, 4}, {2, 3}, {2, 2}, {2, 0}},
+                         {{2, 0}, {2, 2}, {8, 2}, {8, 0}},
+                         {{2, 3}, {2, 4}, {3.75, 3.75}, {4, 3.5}, {3.75, 3.25}},
+                         {{2, 6}, {2, 7}, {3.75, 6.75}, {4, 6.5}, {3.75, 6.25}},
+                         {{2, 8}, {2, 10}, {8, 10}, {8, 8}},
+                         {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
 
         // Two single-point concavities as the opening side of inner loop
-        PolygonAndDcel {{{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{2, 2}, {3, 4}, {2, 5}, {3, 6}, {2, 8}, {8, 8}, {8, 2}}}},
-                        {{{{0, 0}, {0, 10}, {2, 10}, {2, 8}, {2, 5}, {2, 2}, {2, 0}},
-                          {{2, 0}, {2, 2}, {8, 2}, {8, 0}},
-                          {{2, 2}, {2, 5}, {3, 4}},
-                          {{2, 5}, {2, 8}, {3, 6}},
-                          {{2, 8}, {2, 10}, {8, 10}, {8, 8}},
-                          {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
+        PolygonAndDcel{{{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{2, 2}, {3, 4}, {2, 5}, {3, 6}, {2, 8}, {8, 8}, {8, 2}}}},
+                       {{{{0, 0}, {0, 10}, {2, 10}, {2, 8}, {2, 5}, {2, 2}, {2, 0}},
+                         {{2, 0}, {2, 2}, {8, 2}, {8, 0}},
+                         {{2, 2}, {2, 5}, {3, 4}},
+                         {{2, 5}, {2, 8}, {3, 6}},
+                         {{2, 8}, {2, 10}, {8, 10}, {8, 8}},
+                         {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
 
         // Two multi-point concavities as the opening side of inner loop
-        PolygonAndDcel {{{{0, 0}, {0, 10}, {10, 10}, {10, 0}},
-                         {{{2, 2}, {3, 2.5}, {4, 4}, {3, 4.75}, {2, 5}, {3, 5.25}, {4, 6}, {3, 7.5}, {2, 8}, {8, 8}, {8, 2}}}},
-                        {{{{0, 0}, {0, 10}, {2, 10}, {2, 8}, {2, 5}, {2, 2}, {2, 0}},
-                          {{2, 0}, {2, 2}, {8, 2}, {8, 0}},
-                          {{2, 2}, {2, 5}, {3, 4.75}, {4, 4}, {3, 2.5}},
-                          {{2, 5}, {2, 8}, {3, 7.5}, {4, 6}, {3, 5.25}},
-                          {{2, 8}, {2, 10}, {8, 10}, {8, 8}},
-                          {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}}
+        PolygonAndDcel{{{{0, 0}, {0, 10}, {10, 10}, {10, 0}},
+                        {{{2, 2}, {3, 2.5}, {4, 4}, {3, 4.75}, {2, 5}, {3, 5.25}, {4, 6}, {3, 7.5}, {2, 8}, {8, 8}, {8, 2}}}},
+                       {{{{0, 0}, {0, 10}, {2, 10}, {2, 8}, {2, 5}, {2, 2}, {2, 0}},
+                         {{2, 0}, {2, 2}, {8, 2}, {8, 0}},
+                         {{2, 2}, {2, 5}, {3, 4.75}, {4, 4}, {3, 2.5}},
+                         {{2, 5}, {2, 8}, {3, 7.5}, {4, 6}, {3, 5.25}},
+                         {{2, 8}, {2, 10}, {8, 10}, {8, 8}},
+                         {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}}
 
         ));
 
@@ -875,64 +875,64 @@ INSTANTIATE_TEST_SUITE_P(
     CCPPTests_Concavities_Outer_Right, ModifiedTrapezoidalPolygonDecomposition,
     Values(
         // One single-point concavity on closing side of outer loop
-        PolygonAndDcel {{{{0, 0}, {0, -3}, {-2, -5}, {0, -7}, {0, -10}, {-10, -10}, {-10, 0}}},
-                        {{{{0, 0}, {0, -3}, {-2, -5}, {-2, 0}},
-                          {{0, -7}, {0, -10}, {-2, -10}, {-2, -5}},
-                          {{-2, -5}, {-2, -10}, {-10, -10}, {-10, 0}, {-2, 0}}}}},
+        PolygonAndDcel{{{{0, 0}, {0, -3}, {-2, -5}, {0, -7}, {0, -10}, {-10, -10}, {-10, 0}}},
+                       {{{{0, 0}, {0, -3}, {-2, -5}, {-2, 0}},
+                         {{0, -7}, {0, -10}, {-2, -10}, {-2, -5}},
+                         {{-2, -5}, {-2, -10}, {-10, -10}, {-10, 0}, {-2, 0}}}}},
 
         // One multi-point concavity on closing side of outer loop
-        PolygonAndDcel {{{{0, 0}, {0, -2}, {-1, -3}, {-2, -5}, {-1, -7}, {0, -8}, {0, -10}, {-10, -10}, {-10, 0}}},
-                        {{{{0, 0}, {0, -2}, {-1, -3}, {-2, -5}, {-2, 0}},
-                          {{0, -8}, {0, -10}, {-2, -10}, {-2, -5}, {-1, -7}},
-                          {{-2, -5}, {-2, -10}, {-10, -10}, {-10, 0}, {-2, 0}}}}},
+        PolygonAndDcel{{{{0, 0}, {0, -2}, {-1, -3}, {-2, -5}, {-1, -7}, {0, -8}, {0, -10}, {-10, -10}, {-10, 0}}},
+                       {{{{0, 0}, {0, -2}, {-1, -3}, {-2, -5}, {-2, 0}},
+                         {{0, -8}, {0, -10}, {-2, -10}, {-2, -5}, {-1, -7}},
+                         {{-2, -5}, {-2, -10}, {-10, -10}, {-10, 0}, {-2, 0}}}}},
 
         // One single-point concavity as the closing side of outer loop
-        PolygonAndDcel {
+        PolygonAndDcel{
             {{{0, 0}, {-2, -5}, {0, -10}, {-10, -10}, {-10, 0}}},
             {{{{0, 0}, {-2, -5}, {-2, 0}}, {{0, -10}, {-2, -10}, {-2, -5}}, {{-2, -5}, {-2, -10}, {-10, -10}, {-10, 0}, {-2, 0}}}}},
 
         // One multi-point concavity as the closing side of outer loop
-        PolygonAndDcel {{{{0, 0}, {-1, -1}, {-2, -5}, {-1, -9}, {0, -10}, {-10, -10}, {-10, 0}}},
-                        {{{{0, 0}, {-1, -1}, {-2, -5}, {-2, 0}},
-                          {{0, -10}, {-2, -10}, {-2, -5}, {-1, -9}},
-                          {{-2, -5}, {-2, -10}, {-10, -10}, {-10, 0}, {-2, 0}}}}},
+        PolygonAndDcel{{{{0, 0}, {-1, -1}, {-2, -5}, {-1, -9}, {0, -10}, {-10, -10}, {-10, 0}}},
+                       {{{{0, 0}, {-1, -1}, {-2, -5}, {-2, 0}},
+                         {{0, -10}, {-2, -10}, {-2, -5}, {-1, -9}},
+                         {{-2, -5}, {-2, -10}, {-10, -10}, {-10, 0}, {-2, 0}}}}},
 
         // Two single-point concavities on closing side of outer loop
-        PolygonAndDcel {{{{0, 0}, {0, -2}, {-2, -3}, {0, -4}, {0, -6}, {-2, -7}, {0, -8}, {0, -10}, {-10, -10}, {-10, 0}}},
-                        {{{{0, 0}, {0, -2}, {-2, -3}, {-2, 0}},
-                          {{-2, -3}, {0, -4}, {0, -6}, {-2, -7}},
-                          {{0, -8}, {0, -10}, {-2, -10}, {-2, -7}},
-                          {{-2, -3}, {-2, -7}, {-2, -10}, {-10, -10}, {-10, 0}, {-2, 0}}}}},
+        PolygonAndDcel{{{{0, 0}, {0, -2}, {-2, -3}, {0, -4}, {0, -6}, {-2, -7}, {0, -8}, {0, -10}, {-10, -10}, {-10, 0}}},
+                       {{{{0, 0}, {0, -2}, {-2, -3}, {-2, 0}},
+                         {{-2, -3}, {0, -4}, {0, -6}, {-2, -7}},
+                         {{0, -8}, {0, -10}, {-2, -10}, {-2, -7}},
+                         {{-2, -3}, {-2, -7}, {-2, -10}, {-10, -10}, {-10, 0}, {-2, 0}}}}},
 
         // Two multi-point concavities on closing side of outer loop
-        PolygonAndDcel {{{{0, 0},
-                          {0, -2},
-                          {-1, -2.25},
-                          {-2, -3},
-                          {-1, -3.75},
-                          {0, -4},
-                          {0, -6},
-                          {-1, -6.25},
-                          {-2, -7},
-                          {-1, -7.75},
-                          {0, -8},
-                          {0, -10},
-                          {-10, -10},
-                          {-10, 0}}},
-                        {{{{0, 0}, {0, -2}, {-1, -2.25}, {-2, -3}, {-2, 0}},
-                          {{-2, -3}, {-1, -3.75}, {0, -4}, {0, -6}, {-1, -6.25}, {-2, -7}},
-                          {{0, -8}, {0, -10}, {-2, -10}, {-2, -7}, {-1, -7.75}},
-                          {{-2, -3}, {-2, -7}, {-2, -10}, {-10, -10}, {-10, 0}, {-2, 0}}}}},
+        PolygonAndDcel{{{{0, 0},
+                         {0, -2},
+                         {-1, -2.25},
+                         {-2, -3},
+                         {-1, -3.75},
+                         {0, -4},
+                         {0, -6},
+                         {-1, -6.25},
+                         {-2, -7},
+                         {-1, -7.75},
+                         {0, -8},
+                         {0, -10},
+                         {-10, -10},
+                         {-10, 0}}},
+                       {{{{0, 0}, {0, -2}, {-1, -2.25}, {-2, -3}, {-2, 0}},
+                         {{-2, -3}, {-1, -3.75}, {0, -4}, {0, -6}, {-1, -6.25}, {-2, -7}},
+                         {{0, -8}, {0, -10}, {-2, -10}, {-2, -7}, {-1, -7.75}},
+                         {{-2, -3}, {-2, -7}, {-2, -10}, {-10, -10}, {-10, 0}, {-2, 0}}}}},
 
         // Two single-point concavities as the closing side of outer loop
-        PolygonAndDcel {{{{0, 0}, {-2, -3}, {0, -5}, {-2, -7}, {0, -10}, {-10, -10}, {-10, 0}}},
-                        {{{{0, 0}, {-2, -3}, {-2, 0}},
-                          {{-2, -3}, {0, -5}, {-2, -7}},
-                          {{0, -10}, {-2, -10}, {-2, -7}},
-                          {{-2, -3}, {-2, -7}, {-2, -10}, {-10, -10}, {-10, 0}, {-2, 0}}}}},
+        PolygonAndDcel{{{{0, 0}, {-2, -3}, {0, -5}, {-2, -7}, {0, -10}, {-10, -10}, {-10, 0}}},
+                       {{{{0, 0}, {-2, -3}, {-2, 0}},
+                         {{-2, -3}, {0, -5}, {-2, -7}},
+                         {{0, -10}, {-2, -10}, {-2, -7}},
+                         {{-2, -3}, {-2, -7}, {-2, -10}, {-10, -10}, {-10, 0}, {-2, 0}}}}},
 
         // Two multi-point concavities as the closing side of outer loop
-        PolygonAndDcel {
+        PolygonAndDcel{
             {{{0, 0}, {-1, -1}, {-2, -3}, {-1, -3.75}, {0, -5}, {-1, -5.25}, {-2, -7}, {-1, -9}, {0, -10}, {-10, -10}, {-10, 0}}},
             {{{{0, 0}, {-1, -1}, {-2, -3}, {-2, 0}},
               {{-2, -3}, {-1, -3.75}, {0, -5}, {-1, -5.25}, {-2, -7}},
@@ -946,85 +946,82 @@ INSTANTIATE_TEST_SUITE_P(
     CCPPTests_Concavities_Inner_Right, ModifiedTrapezoidalPolygonDecomposition,
     Values(
         // One single-point concavity on closing side of inner loop
-        PolygonAndDcel {
-            {{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}}, {{{-2, -2}, {-2, -4}, {-3, -5}, {-2, -6}, {-2, -8}, {-8, -8}, {-8, -2}}}},
-            {{{{0, 0}, {0, -10}, {-2, -10}, {-2, -8}, {-2, -6}, {-2, -4}, {-2, -2}, {-2, 0}},
-              {{-2, 0}, {-2, -2}, {-8, -2}, {-8, 0}},
-              {{-2, -4}, {-2, -6}, {-3, -5}},
-              {{-2, -8}, {-2, -10}, {-8, -10}, {-8, -8}},
-              {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
+        PolygonAndDcel{{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}}, {{{-2, -2}, {-2, -4}, {-3, -5}, {-2, -6}, {-2, -8}, {-8, -8}, {-8, -2}}}},
+                       {{{{0, 0}, {0, -10}, {-2, -10}, {-2, -8}, {-2, -6}, {-2, -4}, {-2, -2}, {-2, 0}},
+                         {{-2, 0}, {-2, -2}, {-8, -2}, {-8, 0}},
+                         {{-2, -4}, {-2, -6}, {-3, -5}},
+                         {{-2, -8}, {-2, -10}, {-8, -10}, {-8, -8}},
+                         {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
 
         // One multi-point concavity on closing side of inner loop
-        PolygonAndDcel {{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}},
-                         {{{-2, -2}, {-2, -4}, {-2.5, -4.25}, {-3, -5}, {-2.5, -5.75}, {-2, -6}, {-2, -8}, {-8, -8}, {-8, -2}}}},
-                        {{{{0, 0}, {0, -10}, {-2, -10}, {-2, -8}, {-2, -6}, {-2, -4}, {-2, -2}, {-2, 0}},
-                          {{-2, 0}, {-2, -2}, {-8, -2}, {-8, 0}},
-                          {{-2, -4}, {-2, -6}, {-2.5, -5.75}, {-3, -5}, {-2.5, -4.25}},
-                          {{-2, -8}, {-2, -10}, {-8, -10}, {-8, -8}},
-                          {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
+        PolygonAndDcel{{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}},
+                        {{{-2, -2}, {-2, -4}, {-2.5, -4.25}, {-3, -5}, {-2.5, -5.75}, {-2, -6}, {-2, -8}, {-8, -8}, {-8, -2}}}},
+                       {{{{0, 0}, {0, -10}, {-2, -10}, {-2, -8}, {-2, -6}, {-2, -4}, {-2, -2}, {-2, 0}},
+                         {{-2, 0}, {-2, -2}, {-8, -2}, {-8, 0}},
+                         {{-2, -4}, {-2, -6}, {-2.5, -5.75}, {-3, -5}, {-2.5, -4.25}},
+                         {{-2, -8}, {-2, -10}, {-8, -10}, {-8, -8}},
+                         {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
 
         // One single-point concavity as the closing side of inner loop
-        PolygonAndDcel {{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}}, {{{-2, -2}, {-3, -5}, {-2, -8}, {-8, -8}, {-8, -2}}}},
-                        {{{{0, 0}, {0, -10}, {-2, -10}, {-2, -8}, {-2, -2}, {-2, 0}},
-                          {{-2, 0}, {-2, -2}, {-8, -2}, {-8, 0}},
-                          {{-2, -2}, {-2, -8}, {-3, -5}},
-                          {{-2, -8}, {-2, -10}, {-8, -10}, {-8, -8}},
-                          {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
+        PolygonAndDcel{{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}}, {{{-2, -2}, {-3, -5}, {-2, -8}, {-8, -8}, {-8, -2}}}},
+                       {{{{0, 0}, {0, -10}, {-2, -10}, {-2, -8}, {-2, -2}, {-2, 0}},
+                         {{-2, 0}, {-2, -2}, {-8, -2}, {-8, 0}},
+                         {{-2, -2}, {-2, -8}, {-3, -5}},
+                         {{-2, -8}, {-2, -10}, {-8, -10}, {-8, -8}},
+                         {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
 
         // One multi-point concavity as the closing side of inner loop
-        PolygonAndDcel {
-            {{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}}, {{{-2, -2}, {-3, -3}, {-4, -5}, {-3, -7}, {-2, -8}, {-8, -8}, {-8, -2}}}},
-            {{{{0, 0}, {0, -10}, {-2, -10}, {-2, -8}, {-2, -2}, {-2, 0}},
-              {{-2, 0}, {-2, -2}, {-8, -2}, {-8, 0}},
-              {{-2, -2}, {-2, -8}, {-3, -7}, {-4, -5}, {-3, -3}},
-              {{-2, -8}, {-2, -10}, {-8, -10}, {-8, -8}},
-              {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
+        PolygonAndDcel{{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}}, {{{-2, -2}, {-3, -3}, {-4, -5}, {-3, -7}, {-2, -8}, {-8, -8}, {-8, -2}}}},
+                       {{{{0, 0}, {0, -10}, {-2, -10}, {-2, -8}, {-2, -2}, {-2, 0}},
+                         {{-2, 0}, {-2, -2}, {-8, -2}, {-8, 0}},
+                         {{-2, -2}, {-2, -8}, {-3, -7}, {-4, -5}, {-3, -3}},
+                         {{-2, -8}, {-2, -10}, {-8, -10}, {-8, -8}},
+                         {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
 
         // Two single-point concavities on closing side of inner loop
-        PolygonAndDcel {{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}},
-                         {{{-2, -2}, {-2, -3}, {-3, -3.5}, {-2, -4}, {-2, -6}, {-3, -6.5}, {-2, -7}, {-2, -8}, {-8, -8}, {-8, -2}}}},
-                        {{{{0, 0}, {0, -10}, {-2, -10}, {-2, -8}, {-2, -7}, {-2, -6}, {-2, -4}, {-2, -3}, {-2, -2}, {-2, 0}},
-                          {{-2, 0}, {-2, -2}, {-8, -2}, {-8, 0}},
-                          {{-2, -3}, {-2, -4}, {-3, -3.5}},
-                          {{-2, -6}, {-2, -7}, {-3, -6.5}},
-                          {{-2, -8}, {-2, -10}, {-8, -10}, {-8, -8}},
-                          {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
+        PolygonAndDcel{{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}},
+                        {{{-2, -2}, {-2, -3}, {-3, -3.5}, {-2, -4}, {-2, -6}, {-3, -6.5}, {-2, -7}, {-2, -8}, {-8, -8}, {-8, -2}}}},
+                       {{{{0, 0}, {0, -10}, {-2, -10}, {-2, -8}, {-2, -7}, {-2, -6}, {-2, -4}, {-2, -3}, {-2, -2}, {-2, 0}},
+                         {{-2, 0}, {-2, -2}, {-8, -2}, {-8, 0}},
+                         {{-2, -3}, {-2, -4}, {-3, -3.5}},
+                         {{-2, -6}, {-2, -7}, {-3, -6.5}},
+                         {{-2, -8}, {-2, -10}, {-8, -10}, {-8, -8}},
+                         {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
 
         // Two multi-point concavities on closing side of inner loop
-        PolygonAndDcel {{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}},
-                         {{{-2, -2},
-                           {-2, -3},
-                           {-3.75, -3.25},
-                           {-4, -3.5},
-                           {-3.75, -3.75},
-                           {-2, -4},
-                           {-2, -6},
-                           {-3.75, -6.25},
-                           {-4, -6.5},
-                           {-3.75, -6.75},
-                           {-2, -7},
-                           {-2, -8},
-                           {-8, -8},
-                           {-8, -2}}}},
-                        {{{{0, 0}, {0, -10}, {-2, -10}, {-2, -8}, {-2, -7}, {-2, -6}, {-2, -4}, {-2, -3}, {-2, -2}, {-2, 0}},
-                          {{-2, 0}, {-2, -2}, {-8, -2}, {-8, 0}},
-                          {{-2, -3}, {-2, -4}, {-3.75, -3.75}, {-4, -3.5}, {-3.75, -3.25}},
-                          {{-2, -6}, {-2, -7}, {-3.75, -6.75}, {-4, -6.5}, {-3.75, -6.25}},
-                          {{-2, -8}, {-2, -10}, {-8, -10}, {-8, -8}},
-                          {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
+        PolygonAndDcel{{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}},
+                        {{{-2, -2},
+                          {-2, -3},
+                          {-3.75, -3.25},
+                          {-4, -3.5},
+                          {-3.75, -3.75},
+                          {-2, -4},
+                          {-2, -6},
+                          {-3.75, -6.25},
+                          {-4, -6.5},
+                          {-3.75, -6.75},
+                          {-2, -7},
+                          {-2, -8},
+                          {-8, -8},
+                          {-8, -2}}}},
+                       {{{{0, 0}, {0, -10}, {-2, -10}, {-2, -8}, {-2, -7}, {-2, -6}, {-2, -4}, {-2, -3}, {-2, -2}, {-2, 0}},
+                         {{-2, 0}, {-2, -2}, {-8, -2}, {-8, 0}},
+                         {{-2, -3}, {-2, -4}, {-3.75, -3.75}, {-4, -3.5}, {-3.75, -3.25}},
+                         {{-2, -6}, {-2, -7}, {-3.75, -6.75}, {-4, -6.5}, {-3.75, -6.25}},
+                         {{-2, -8}, {-2, -10}, {-8, -10}, {-8, -8}},
+                         {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
 
         // Two single-point concavities as the closing side of inner loop
-        PolygonAndDcel {
-            {{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}}, {{{-2, -2}, {-3, -4}, {-2, -5}, {-3, -6}, {-2, -8}, {-8, -8}, {-8, -2}}}},
-            {{{{0, 0}, {0, -10}, {-2, -10}, {-2, -8}, {-2, -5}, {-2, -2}, {-2, 0}},
-              {{-2, 0}, {-2, -2}, {-8, -2}, {-8, 0}},
-              {{-2, -2}, {-2, -5}, {-3, -4}},
-              {{-2, -5}, {-2, -8}, {-3, -6}},
-              {{-2, -8}, {-2, -10}, {-8, -10}, {-8, -8}},
-              {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
+        PolygonAndDcel{{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}}, {{{-2, -2}, {-3, -4}, {-2, -5}, {-3, -6}, {-2, -8}, {-8, -8}, {-8, -2}}}},
+                       {{{{0, 0}, {0, -10}, {-2, -10}, {-2, -8}, {-2, -5}, {-2, -2}, {-2, 0}},
+                         {{-2, 0}, {-2, -2}, {-8, -2}, {-8, 0}},
+                         {{-2, -2}, {-2, -5}, {-3, -4}},
+                         {{-2, -5}, {-2, -8}, {-3, -6}},
+                         {{-2, -8}, {-2, -10}, {-8, -10}, {-8, -8}},
+                         {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
 
         // Two multi-point concavities as the closing side of inner loop
-        PolygonAndDcel {
+        PolygonAndDcel{
             {{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}},
              {{{-2, -2}, {-3, -2.5}, {-4, -4}, {-3, -4.75}, {-2, -5}, {-3, -5.25}, {-4, -6}, {-3, -7.5}, {-2, -8}, {-8, -8}, {-8, -2}}}},
             {{{{0, 0}, {0, -10}, {-2, -10}, {-2, -8}, {-2, -5}, {-2, -2}, {-2, 0}},
@@ -1042,7 +1039,7 @@ INSTANTIATE_TEST_SUITE_P(CCPPTests_Real_Edge_Cases, ModifiedTrapezoidalPolygonDe
                          Values(
                              // Spike outwards on closing side of exterior loop, where the
                              // segment below it starts to the right of where the spike starts
-                             PolygonAndDcel {{{{0, 0}, {0, 10}, {10, 10}, {10, 8}, {12, 5}, {11, 3.5}, {10, 3}, {10, 0}}},
-                                             {{{{0, 0}, {0, 10}, {10, 10}, {10, 8}, {12, 5}, {11, 3.5}, {10, 3}, {10, 0}}}}}
+                             PolygonAndDcel{{{{0, 0}, {0, 10}, {10, 10}, {10, 8}, {12, 5}, {11, 3.5}, {10, 3}, {10, 0}}},
+                                            {{{{0, 0}, {0, 10}, {10, 10}, {10, 8}, {12, 5}, {11, 3.5}, {10, 3}, {10, 0}}}}}
 
                              ));

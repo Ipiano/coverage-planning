@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ads/ccpp/dcel.h"
+#include "ads/dcel/dcel.h"
 
 namespace ads
 {
@@ -12,7 +12,7 @@ namespace region_merger
 {
 struct MergeRegion
 {
-    dcel::region_t* dcelRegion;
+    dcel::Region dcelRegion;
     quantity::Radians swathDir;
 };
 
@@ -39,9 +39,8 @@ class RegionMergerIf
      * be merged together. All regions in the input must be in exactly one of the output MergeRegionGroups.
      * Regions in a group should be ordered from left to right
      */
-    virtual std::vector<region_merger::MergeRegionGroup> mergeRegions(const DoublyConnectedEdgeList& dcel) = 0;
+    virtual std::vector<region_merger::MergeRegionGroup> mergeRegions(const Dcel& dcel) = 0;
 };
-
 }
 }
 }

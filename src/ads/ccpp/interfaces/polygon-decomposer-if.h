@@ -1,7 +1,7 @@
 #pragma once
 
 #include "ads/ccpp/typedefs.h"
-#include "ads/ccpp/dcel.h"
+#include "ads/dcel/dcel.h"
 
 #include <vector>
 
@@ -42,11 +42,11 @@ class PolygonDecomposerIf
      *
      * \param[in] poly - Polygon to decompose
      *
-     * \returns A DoublyConnectedEdgeList which represents all the regions produced
+     * \returns A Dcel which represents all the regions produced
      *
      * \throws std::invalid_argument if the given polygon is malformed
      */
-    virtual DoublyConnectedEdgeList decomposePolygon(const geometry::Polygon2d& poly) const = 0;
+    virtual Dcel decomposePolygon(const geometry::Polygon2d& poly) const = 0;
 };
 }
 }

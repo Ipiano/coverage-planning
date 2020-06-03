@@ -1,8 +1,8 @@
 #pragma once
 
 #include "ads/ccpp/interfaces/polygon-decomposer-if.h"
-#include "ads/ccpp/dcel.h"
 #include "ads/ccpp/typedefs.h"
+#include "ads/dcel/dcel.h"
 
 namespace ads
 {
@@ -22,7 +22,7 @@ class ModifiedTrapezoidal : public interfaces::PolygonDecomposerIf
      */
     ModifiedTrapezoidal(const ccpp::quantity::Degrees angleTolerance = ccpp::units::Degree * 361);
 
-    DoublyConnectedEdgeList decomposePolygon(const geometry::Polygon2d& poly) const override;
+    Dcel decomposePolygon(const geometry::Polygon2d& poly) const override;
 };
 }
 }

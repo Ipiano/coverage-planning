@@ -9,11 +9,42 @@ namespace ccpp
 namespace region_merger
 {
 
+//! todo Make this not a magic constant
+constexpr static double EPSILON = 0.0001;
+
+//! Checks if two DCEL vertices have the same X coord (within reason)
+struct VertexXCoordEqual
+{
+    bool operator()(const dcel::Vertex v1, const dcel::Vertex v2)
+    {
+        const auto p1 = v1.point();
+        const auto p2 = v2.point();
+
+        return std::abs(p1.x() - p2.x()) < EPSILON;
+    }
+};
+
+struct FindLowerLeftPoint
+{
+    bool m_first = true;
+    ccpp::geometry::Point2d m_lowerLeftPoint;
+
+    void operator()(const ccpp::geometry::ConstReferringSegment2d& segment)
+    {
+        const auto& pt = segment.first;
+        if (m_first || pt.x() < m_lowerLeftPoint.x())
+        {
+            m_first          = false;
+            m_lowerLeftPoint = pt;
+        }
+    }
+};
+
 struct MergeGroupDetails;
 struct MergeRegionDetails
 {
     // dcel region that could be merged with others
-    dcel::region_t* dcelRegion;
+    dcel::Region dcelRegion;
 
     // Optimal direction and cost for the region alone
     quantity::Radians optimalDirection;
@@ -40,28 +71,28 @@ struct MergeGroupDetails
     double rightRegionSavings;
 };
 
-typedef std::unordered_map<dcel::region_t*, std::unique_ptr<MergeRegionDetails>> MergeRegionDetailsMap;
+typedef std::unordered_map<dcel::Region, std::unique_ptr<MergeRegionDetails>> MergeRegionDetailsMap;
 
 using interfaces::OptimalDirectionCalculatorIf;
 using interfaces::region_merger::MergeRegion;
 using interfaces::region_merger::MergeRegionGroup;
 
-std::vector<MergeRegionGroup> mergeRegions(const DoublyConnectedEdgeList& dcel, const OptimalDirectionCalculatorIf& dirCalculator);
-void mergeBestAdjacentRegion(dcel::region_t* currentRegion, dcel::region_t* previousRegion,
-                             const OptimalDirectionCalculatorIf& dirCalculator, const MergeRegionDetailsMap& mergeDetailsMap);
-void mergeTwoRegions(dcel::region_t* left, dcel::region_t* right, dcel::half_edge_t* sharedEdgeLeftSide,
+std::vector<MergeRegionGroup> mergeRegions(const Dcel& dcel, const OptimalDirectionCalculatorIf& dirCalculator);
+void mergeBestAdjacentRegion(dcel::Region currentRegion, dcel::Region previousRegion, const OptimalDirectionCalculatorIf& dirCalculator,
+                             const MergeRegionDetailsMap& mergeDetailsMap);
+void mergeTwoRegions(dcel::Region left, dcel::Region right, dcel::HalfEdge sharedEdgeLeftSide,
                      const OptimalDirectionCalculatorIf& dirCalculator, const MergeRegionDetailsMap& mergeDetailsMap);
 
 RegionMerger::RegionMerger(const OptimalDirectionCalculatorIf& dirCalculator) : m_dirCalculator(dirCalculator)
 {
 }
 
-std::vector<MergeRegionGroup> RegionMerger::mergeRegions(const DoublyConnectedEdgeList& dcel)
+std::vector<MergeRegionGroup> RegionMerger::mergeRegions(const Dcel& dcel)
 {
     return region_merger::mergeRegions(dcel, m_dirCalculator);
 }
 
-std::vector<MergeRegionGroup> mergeRegions(const DoublyConnectedEdgeList& dcel, const OptimalDirectionCalculatorIf& dirCalculator)
+std::vector<MergeRegionGroup> mergeRegions(const Dcel& dcel, const OptimalDirectionCalculatorIf& dirCalculator)
 {
     MergeRegionDetailsMap mergeDetails;
 
@@ -71,16 +102,16 @@ std::vector<MergeRegionGroup> mergeRegions(const DoublyConnectedEdgeList& dcel, 
     //!     Compute the Optimal Direction of coverage for that region
     //!     Store the result with the region
 
-    for (const auto& regionPtr : dcel.regions)
+    for (const auto& region : dcel.regions())
     {
-        const auto optimalDirCost = dirCalculator.calculateOptimalDirectionAndCost(*regionPtr);
+        const auto optimalDirCost = dirCalculator.calculateOptimalDirectionAndCost(region);
 
         std::unique_ptr<MergeRegionDetails> newRegion(new MergeRegionDetails);
-        newRegion->dcelRegion           = regionPtr.get();
+        newRegion->dcelRegion           = region;
         newRegion->optimalDirection     = optimalDirCost.first;
         newRegion->optimalDirectionCost = optimalDirCost.second;
 
-        mergeDetails[regionPtr.get()] = std::move(newRegion);
+        mergeDetails[region] = std::move(newRegion);
     }
 
     //! 3.5 Merge the Regions
@@ -90,13 +121,13 @@ std::vector<MergeRegionGroup> mergeRegions(const DoublyConnectedEdgeList& dcel, 
     //! Return modified DCEL
 
     // Determine the left-most face on the dcel
-    dcel::half_edge_t* lowerLeftEdge = dcel.edges[0].get();
-    for (const auto& halfEdgePtr : dcel.edges)
-    {
-        if (halfEdgePtr->origin->location.x() < lowerLeftEdge->origin->location.x())
-            lowerLeftEdge = halfEdgePtr.get();
-    }
-    mergeBestAdjacentRegion(lowerLeftEdge->region, nullptr, dirCalculator, mergeDetails);
+    const auto query       = dcel.forEachSegment(FindLowerLeftPoint());
+    const auto startVertex = dcel.vertex(query.m_lowerLeftPoint);
+    const auto startEdge   = startVertex.edge();
+
+    assert(startEdge);
+
+    mergeBestAdjacentRegion(startEdge.region(), dcel::Region(), dirCalculator, mergeDetails);
 
     // Build the result
     std::vector<MergeRegionGroup> result;
@@ -133,11 +164,6 @@ std::vector<MergeRegionGroup> mergeRegions(const DoublyConnectedEdgeList& dcel, 
     return result;
 }
 
-static bool pointsHaveSameXCoord(const dcel::vertex_t* v1, const dcel::vertex_t* v2)
-{
-    return std::abs(v1->location.x() - v2->location.x()) < 0.00001;
-}
-
 static quantity::Radians normal(const quantity::Radians angle)
 {
     const static auto quarter = static_cast<quantity::Radians>(units::Degree * 90);
@@ -155,18 +181,18 @@ static bool same(const quantity::Radians left, quantity::Radians right)
 // then evaluates merging nextRegion with each of the regions it is connected to on the right
 //
 // Change from original algorithm: nextRegion may be connected to > 4 regions; so all will be processed
-void mergeBestAdjacentRegion(dcel::region_t* const currentRegion, dcel::region_t* const previousRegion,
+void mergeBestAdjacentRegion(dcel::Region const currentRegion, dcel::Region const previousRegion,
                              const OptimalDirectionCalculatorIf& dirCalculator, const MergeRegionDetailsMap& mergeDetailsMap)
 {
-    assert(currentRegion != nullptr);
+    assert(currentRegion);
     assert(mergeDetailsMap.count(currentRegion) > 0);
 
     const auto& mergeDetails = mergeDetailsMap.find(currentRegion)->second;
-    std::vector<dcel::half_edge_t*> leftSideAdjacentEdges;
+    std::vector<dcel::HalfEdge> leftSideAdjacentEdges;
 
     //! 1. Set currentEdge equal to any edge on the subregion to be processed.
     //!     The current edge represents the common edge between two faces
-    dcel::half_edge_t* currentEdge = currentRegion->edge;
+    dcel::HalfEdge currentEdge = currentRegion.edge();
 
     //! 2. Mark currentRegion as visited
     mergeDetails->visited = true;
@@ -180,15 +206,15 @@ void mergeBestAdjacentRegion(dcel::region_t* const currentRegion, dcel::region_t
         //! a. Set secondRegion equal to the face of currentEdge's twin
         // Also double check for degenerate case of 0-length edge
         // Also check if the adjacent region is not the one we came from (see comment in c below about why we can do this)
-        if (currentEdge->twin != nullptr && currentEdge->origin != currentEdge->next->origin && currentEdge->twin->region != previousRegion)
+        if (currentEdge.twin() && currentEdge.origin() != currentEdge.next().origin() && currentEdge.twin().region() != previousRegion)
         {
-            auto secondRegion = currentEdge->twin->region;
-            if (!pointsHaveSameXCoord(currentEdge->origin, currentEdge->next->origin))
+            auto secondRegion = currentEdge.twin().region();
+            if (!VertexXCoordEqual()(currentEdge.origin(), currentEdge.next().origin()))
                 throw std::invalid_argument("invalid dcel: regions share non-vertical edge");
 
             // Since regions are only adjacent to other regions along contiguous vertical edges,
             // we can determine which side the adjacent region is on by the direction of the shared edge
-            const bool rightSideAdjacent = currentEdge->origin->location.y() > currentEdge->next->origin->location.y();
+            const bool rightSideAdjacent = currentEdge.origin().point().y() > currentEdge.next().origin().point().y();
 
             //! b. if secondRegion != previousRegion and it adjoins on the right [of currentRegion]
             if (rightSideAdjacent)
@@ -211,16 +237,16 @@ void mergeBestAdjacentRegion(dcel::region_t* const currentRegion, dcel::region_t
                 leftSideAdjacentEdges.push_back(currentEdge);
             }
         }
-        currentEdge = currentEdge->next;
+        currentEdge = currentEdge.next();
     } while (currentEdge != startEdge);
 
     //! 5. For each edge, leftEdge, in the list of left edges to process later
-    for (auto* leftEdge : leftSideAdjacentEdges)
+    for (auto leftEdge : leftSideAdjacentEdges)
     {
         //! a. If the region on the opposite side of the edge is not null and it has not been visited
-        assert(leftEdge->twin != nullptr);
+        assert(leftEdge.twin());
 
-        auto leftRegion = leftEdge->twin->region;
+        auto leftRegion = leftEdge.twin().region();
         assert(mergeDetailsMap.count(leftRegion) > 0);
 
         const auto& leftMergeDetails = mergeDetailsMap.find(leftRegion)->second;
@@ -230,19 +256,19 @@ void mergeBestAdjacentRegion(dcel::region_t* const currentRegion, dcel::region_t
             mergeBestAdjacentRegion(leftRegion, currentRegion, dirCalculator, mergeDetailsMap);
 
             //! ii. Call mergeTwoRegions(currentRegion, leftEdge)
-            mergeTwoRegions(leftRegion, currentRegion, leftEdge->twin, dirCalculator, mergeDetailsMap);
+            mergeTwoRegions(leftRegion, currentRegion, leftEdge.twin(), dirCalculator, mergeDetailsMap);
         }
     }
 
     //! 6. Return currentRegion
 }
 
-void mergeTwoRegions(dcel::region_t* left, dcel::region_t* right, dcel::half_edge_t* sharedEdgeLeftSide,
+void mergeTwoRegions(dcel::Region left, dcel::Region right, dcel::HalfEdge sharedEdgeLeftSide,
                      const OptimalDirectionCalculatorIf& dirCalculator, const MergeRegionDetailsMap& mergeDetailsMap)
 {
-    assert(left != nullptr);
+    assert(left);
     assert(mergeDetailsMap.count(left) > 0);
-    assert(right != nullptr);
+    assert(right);
     assert(mergeDetailsMap.count(right) > 0);
 
     const auto& leftRegionMergeDetails  = mergeDetailsMap.find(left)->second;
@@ -260,16 +286,16 @@ void mergeTwoRegions(dcel::region_t* left, dcel::region_t* right, dcel::half_edg
     newMergeGroup->rightRegion = rightRegionMergeDetails.get();
 
     // Get the vertices on the shared edge
-    dcel::half_edge_t* sharedEdgeLeftSideTop = sharedEdgeLeftSide;
-    while (sharedEdgeLeftSideTop->prev->twin == sharedEdgeLeftSideTop->twin->next)
-        sharedEdgeLeftSideTop = sharedEdgeLeftSideTop->prev;
+    dcel::HalfEdge sharedEdgeLeftSideTop = sharedEdgeLeftSide;
+    while (sharedEdgeLeftSideTop.previous().twin() == sharedEdgeLeftSideTop.twin().next())
+        sharedEdgeLeftSideTop = sharedEdgeLeftSideTop.previous();
 
-    dcel::half_edge_t* sharedEdgeLeftSideBottom = sharedEdgeLeftSide;
-    while (sharedEdgeLeftSideBottom->next->twin == sharedEdgeLeftSideBottom->twin->prev)
-        sharedEdgeLeftSideBottom = sharedEdgeLeftSideBottom->next;
+    dcel::HalfEdge sharedEdgeLeftSideBottom = sharedEdgeLeftSide;
+    while (sharedEdgeLeftSideBottom.next().twin() == sharedEdgeLeftSideBottom.twin().previous())
+        sharedEdgeLeftSideBottom = sharedEdgeLeftSideBottom.next();
 
-    const auto topSharedVertex    = sharedEdgeLeftSideTop->origin->location;
-    const auto bottomSharedVertex = sharedEdgeLeftSideBottom->twin->origin->location;
+    const auto topSharedVertex    = sharedEdgeLeftSideTop.origin().point();
+    const auto bottomSharedVertex = sharedEdgeLeftSideBottom.twin().origin().point();
 
     const static auto verticalAngle = static_cast<quantity::Radians>(units::Degree * 90);
 
@@ -287,8 +313,8 @@ void mergeTwoRegions(dcel::region_t* left, dcel::region_t* right, dcel::half_edg
 
         //! a. Calculate the cost savings if both regions are covered in the direction normal
         //!     to their current optimal direction.
-        const auto normalLeftCost     = dirCalculator.totalCost(*left, normalDir);
-        const auto normalRightCost    = dirCalculator.totalCost(*right, normalDir);
+        const auto normalLeftCost     = dirCalculator.totalCost(left, normalDir);
+        const auto normalRightCost    = dirCalculator.totalCost(right, normalDir);
         const auto normalUnmergedCost = normalLeftCost + normalRightCost;
 
         const double normalSavings    = dirCalculator.edgeCost(topSharedVertex, bottomSharedVertex, normalDir);
@@ -362,10 +388,10 @@ void mergeTwoRegions(dcel::region_t* left, dcel::region_t* right, dcel::half_edg
         for (const auto& dir : dirsToCheck)
         {
             const double leftCost = same(dir, leftRegionMergeDetails->optimalDirection) ? leftRegionMergeDetails->optimalDirectionCost
-                                                                                        : dirCalculator.totalCost(*left, dir);
+                                                                                        : dirCalculator.totalCost(left, dir);
 
             const double rightCost = same(dir, rightRegionMergeDetails->optimalDirection) ? rightRegionMergeDetails->optimalDirectionCost
-                                                                                          : dirCalculator.totalCost(*right, dir);
+                                                                                          : dirCalculator.totalCost(right, dir);
 
             const double unmergedCost = leftCost + rightCost;
             const double savings      = dirCalculator.edgeCost(topSharedVertex, bottomSharedVertex, dir);
@@ -475,7 +501,6 @@ void mergeTwoRegions(dcel::region_t* left, dcel::region_t* right, dcel::half_edg
         }
     }
 }
-
 }
 }
 }
