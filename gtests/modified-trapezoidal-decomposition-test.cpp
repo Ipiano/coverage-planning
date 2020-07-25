@@ -1,4 +1,4 @@
-#include "ads/ccpp/polygon-decomposer/modified-trapezoidal.h"
+#include "ads/ccpp/polygon-decomposer/modified-trapezoidal/modified-trapezoidal.h"
 
 #include <boost/geometry/algorithms/distance.hpp>
 #include <boost/geometry/multi/geometries/multi_point.hpp>
@@ -434,7 +434,7 @@ INSTANTIATE_TEST_SUITE_P(CCPPTests_Basic, ModifiedTrapezoidalPolygonDecompositio
 
 // Tests for when there are weird convexities on the left side of the outer loop
 INSTANTIATE_TEST_SUITE_P(
-    CCPPTests_Covexities_Outer_Left, ModifiedTrapezoidalPolygonDecomposition,
+    CCPPTests_Convexities_Outer_Left, ModifiedTrapezoidalPolygonDecomposition,
     Values(
         // One single-point convexity on opening side of outer loop
         PolygonAndDcel{{{{3, 0}, {3, 3}, {0, 5}, {3, 7}, {3, 10}, {10, 10}, {10, 0}}},
@@ -572,7 +572,7 @@ INSTANTIATE_TEST_SUITE_P(
 
 // Tests for when there are weird convexities on the right side of the outer loop
 INSTANTIATE_TEST_SUITE_P(
-    CCPPTests_Covexities_Outer_Right, ModifiedTrapezoidalPolygonDecomposition,
+    CCPPTests_Convexities_Outer_Right, ModifiedTrapezoidalPolygonDecomposition,
     Values(
         // One single-point convexity on closing side of outer loop
         PolygonAndDcel{{{{-3, 0}, {-3, -3}, {0, -5}, {-3, -7}, {-3, -10}, {-10, -10}, {-10, 0}}},

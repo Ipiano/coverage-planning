@@ -2,6 +2,7 @@
 
 #include "ads/ccpp/interfaces/polygon-decomposer-if.h"
 #include "ads/ccpp/typedefs.h"
+
 #include "ads/dcel/dcel.h"
 
 namespace ads
@@ -10,7 +11,8 @@ namespace ccpp
 {
 namespace polygon_decomposer
 {
-
+namespace modified_trapezoidal
+{
 class ModifiedTrapezoidal : public interfaces::PolygonDecomposerIf
 {
     const ccpp::quantity::Degrees m_angleTolerance;
@@ -24,6 +26,8 @@ class ModifiedTrapezoidal : public interfaces::PolygonDecomposerIf
 
     Dcel decomposePolygon(const geometry::Polygon2d& poly) const override;
 };
+}
+using modified_trapezoidal::ModifiedTrapezoidal;
 }
 }
 }

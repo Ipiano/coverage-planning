@@ -3,7 +3,7 @@
 
 #include "ads/ccpp/initial-cost/min-across-angles.hpp"
 #include "ads/ccpp/turn-cost/u-shaped.h"
-#include "ads/ccpp/polygon-decomposer/modified-trapezoidal.h"
+#include "ads/ccpp/polygon-decomposer/modified-trapezoidal/modified-trapezoidal.h"
 #include "ads/ccpp/coordinate-transform.hpp"
 #include "ads/ccpp/region-merger/region-merger.h"
 #include "ads/ccpp/swath-and-region-producer/swath-and-region-producer.h"

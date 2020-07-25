@@ -1,5 +1,5 @@
 #include "ads/ccpp/ccpp.h"
-#include "ads/ccpp/polygon-decomposer/modified-trapezoidal.h"
+#include "ads/ccpp/polygon-decomposer/modified-trapezoidal/modified-trapezoidal.h"
 
 #include <gtest/gtest.h>
 
