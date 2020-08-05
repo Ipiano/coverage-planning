@@ -77,9 +77,31 @@ class Edge
      */
     bool isVertical() const;
 
-    bool operator<(const Edge* other) const { return operator<(*other); }
+    /*!
+     * \brief Less Than operator used to sort edges for the sweep line algorithm
+     *
+     * An edge is considered less than another edge if
+     * a. its left-most point is to the left of the other edge OR
+     * b. its left-most point is at the same X coordinate as the left-most point of the other edge
+     * but is below it OR
+     * c. its left-most point is the same as the left-most point of the other edge and the angle
+     * between the edge and a horizontal line is less (see angleLessThan())
+     *
+     * \param other Edge to compare to
+     * \return True if this edge should be sorted before the other
+     */
     bool operator<(const Edge& other) const;
+    bool operator<(const Edge* other) const { return operator<(*other); }
 
+    /*!
+     * \brief Compares the angle of this edge to the angle of another edge
+     *
+     * The "angle" of an edge is the angle between it and a line on the X axis.
+     * Angle values go from -PI (straight down) to +PI (straight up).
+     *
+     * \param other Edge to compare to
+     * \return True if this edge has a lower angle than the other
+     */
     bool angleLessThan(const Edge* other) const { return angleLessThan(*other); }
     bool angleLessThan(const Edge& other) const { return unitDotHorizontal() < other.unitDotHorizontal(); }
 
@@ -143,19 +165,41 @@ class PolygonEdge : public Edge
      * This image shows a couple examples of what it would look like
      * in extreme cases
      *
-     *    *->-  ->-*
-     *    |        |
-     *    ^        ^
-     *    |        |
-     * ->-*        *->-
+     * \verbatim
+         *->-  ->-*
+         |        |
+         ^        ^
+         |        |
+      ->-*        *->-
+      \endverbatim
      */
     bool isVerticalZigZag() const;
 
-    // TODO: Not guaranteed to sort correctly when
-    // two edges on separate loops have the same first
-    // point and same angle
-    bool operator<(const PolygonEdge* other) { return operator<(*other); }
+    /*!
+     * \brief Less than operator to sort Polygon Edges slightly differently than regular Edges
+     *
+     * The PolygonEdge < operator is the same as the Edge < operator, except that it first
+     * checks for a zig-zag. If the edge is vertical, and it's upper point is the second
+     * point of the edge before and it's lower point is the first point of the next edge, like
+     * so
+     *
+     * \verbatim
+       ->-*
+          |
+          ^
+          |
+          *->-
+      \endverbatim
+     *
+     * then the edge is a special case which is sorted before the edge after it. This guarantees
+     * that when traversing the sorted edge list, the edges of the polygon as you travel around it
+     * are in the order they are connected.
+     *
+     * \param other Edge to compare to
+     * \return True if this edge is before the other
+     */
     bool operator<(const PolygonEdge& other);
+    bool operator<(const PolygonEdge* other) { return operator<(*other); }
 
   private:
     friend class PolygonSweepLineAlgorithm;

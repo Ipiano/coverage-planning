@@ -10,25 +10,39 @@ namespace interfaces
 {
 namespace region_merger
 {
+
+/*!
+ * \brief Specification of a dcel::Region and the direction it should be swathed in a RegionMergerIf solution
+ */
 struct MergeRegion
 {
     dcel::Region dcelRegion;
     quantity::Radians swathDir;
 };
 
+/*!
+ * \brief Grouping of regions in the solution produced by a RegionMergerIf
+ *
+ * All regions in a group may not have the same direction for swathing; however, their
+ * being in the same group should indicate that the solution is to travel from one to the
+ * next by turning on the shared edge, rather than complete each of the regions separately.
+ */
 struct MergeRegionGroup
 {
     std::vector<MergeRegion> regionsToMerge;
 };
 }
 
+/*!
+ * \brief Interface for the region-merging step of the ccpp algorithm
+ */
 class RegionMergerIf
 {
   public:
     virtual ~RegionMergerIf() = default;
 
     /*!
-     * \brief Recursively considers pairs of adjacent regions and merges them when appropriate
+     * \brief Combines regions in a DCEL and optionally defines new directions for them in order to produce a lower-cost solution
      *
      * Assumes that the given DCEL follows the rules outlined in the description of
      * PolygonDecomposerIf

@@ -19,7 +19,14 @@ namespace ads
 namespace ccpp
 {
 /*!
- * Creates a boost transform strategy which will move a shape to the origin and rotate it counterclockwise by an angle
+ * \brief Creates a boost transform strategy which will move a shape to the origin and rotate it counterclockwise by an angle
+ *
+ * \tparam Boost geometry type
+ *
+ * \param shape Shape to move and rotate
+ * \param angle Angle in radians to rotate by after moving
+ *
+ * \return A Boost matrix transform strategy which can be used with boost::geometry::transform
  */
 template <class T>
 boost::geometry::strategy::transform::matrix_transformer<double, 2, 2> moveToOriginAndRotateCCWTransform(const T& shape,

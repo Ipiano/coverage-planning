@@ -14,6 +14,7 @@ quantity::Radians toRad(const double degrees)
     return static_cast<quantity::Radians>(units::Degree * degrees);
 }
 
+//! \test Test that U-Turn cost function returns 0 when given edge is parallel to direction of travel
 TEST(CCPPTests, UTurnIs0WhenParallel)
 {
     turn_cost::UShaped calculator(1, 1, 1);
@@ -31,6 +32,8 @@ TEST(CCPPTests, UTurnIs0WhenParallel)
     EXPECT_NEAR(cost, 0, 0.001);
 }
 
+//! \test Test that U-Turn cost function returns the same value when either the
+//! direction of travel is flipped 180 degrees
 TEST(CCPPTests, UTurnIsUndirectional)
 {
     turn_cost::UShaped calculator(1, 1, 1);
@@ -60,6 +63,8 @@ TEST(CCPPTests, UTurnIsUndirectional)
     EXPECT_NEAR(cost, 0, 0.001);
 }
 
+//! \test Test that the U-Turn cost function returns the circumference of a half-circle when
+//! direction of travel is perpendicular to the edge and all weights are 1
 TEST(CCPPTests, UTurnPerpendicularIsOnlyTurn)
 {
     turn_cost::UShaped calculator(1, 1, 1);
@@ -77,6 +82,8 @@ TEST(CCPPTests, UTurnPerpendicularIsOnlyTurn)
     EXPECT_NEAR(cost, expected, 0.001);
 }
 
+//! \test Test that the U-Turn cost function returns a higher value for non-perpendicular
+//! directions of travel than perpendicular ones.
 TEST(CCPPTests, UTurnAtAngleMoreExpensiveThanPerpendicular)
 {
     turn_cost::UShaped calculator(1, 1, 1);

@@ -11,6 +11,7 @@ bool equal(const ccpp::geometry::Point2d& p1, const ccpp::geometry::Point2d& p2)
     return std::abs(bg::distance(p1, p2)) < 0.001;
 }
 
+//! \test Test that dcel::Dcel creates a vertex when a new point is added
 TEST(Dcel, AddVertex)
 {
     Dcel dcel;
@@ -22,6 +23,7 @@ TEST(Dcel, AddVertex)
     EXPECT_TRUE(isValidResult.first) << isValidResult.second;
 }
 
+//! \test Test that dcel::Dcel does not assign an edge to newly-added vertices
 TEST(Dcel, NewVerticesHaveNoEdge)
 {
     Dcel dcel;
@@ -34,6 +36,8 @@ TEST(Dcel, NewVerticesHaveNoEdge)
     EXPECT_TRUE(isValidResult.first) << isValidResult.second;
 }
 
+//! \test Test that dcel::Dcel will return an existing vertex instead of creating a
+//! new one when a point is accessed the second time
 TEST(Dcel, GetExistingVertex)
 {
     Dcel dcel;
@@ -47,20 +51,8 @@ TEST(Dcel, GetExistingVertex)
     EXPECT_TRUE(isValidResult.first) << isValidResult.second;
 }
 
-TEST(Dcel, DifferentVerticesNotEqual)
-{
-    Dcel dcel;
-
-    const auto v1 = dcel.vertex({10, 10});
-    const auto v2 = dcel.vertex({10, 11});
-
-    EXPECT_TRUE(equal(v2.point(), ccpp::geometry::Point2d(10, 11)));
-    EXPECT_NE(v1, v2);
-
-    const auto isValidResult = dcel.isValid();
-    EXPECT_TRUE(isValidResult.first) << isValidResult.second;
-}
-
+//! \test Test that dcel::Dcel can be used to create a region with a single edge
+//! between two existing vertices, and that the edge will have appropriate links.
 TEST(Dcel, CreateRegion)
 {
     Dcel dcel;
@@ -95,6 +87,7 @@ TEST(Dcel, CreateRegion)
     EXPECT_TRUE(isValidResult.first) << isValidResult.second;
 }
 
+//! \test Test that dcel::Dcel can split an edge into two adjacent ones in the same region
 TEST(Dcel, SplitEdgeOnce)
 {
     Dcel dcel;
@@ -124,6 +117,7 @@ TEST(Dcel, SplitEdgeOnce)
     EXPECT_TRUE(isValidResult.first) << isValidResult.second;
 }
 
+//! \test Test that dcel::Dcel can split an edge into two adjacent ones in the same region twice
 TEST(Dcel, SplitEdgeTwice)
 {
     Dcel dcel;
@@ -160,6 +154,7 @@ TEST(Dcel, SplitEdgeTwice)
     EXPECT_TRUE(isValidResult.first) << isValidResult.second;
 }
 
+//! \test Test that dcel::Dcel can split a region into two by creating an edge between two non-adjacent edges
 TEST(Dcel, SplitRegionInMiddle)
 {
     Dcel dcel;
@@ -203,6 +198,7 @@ TEST(Dcel, SplitRegionInMiddle)
     EXPECT_TRUE(isValidResult.first) << isValidResult.second;
 }
 
+//! \test Test that dcel::Dcel can split an edge that has a twin and the twin will be split appropriately also
 TEST(Dcel, SplitEdgeWithTwin)
 {
     Dcel dcel;
@@ -255,6 +251,9 @@ TEST(Dcel, SplitEdgeWithTwin)
     EXPECT_TRUE(isValidResult.first) << isValidResult.second;
 }
 
+//! \test Test that dcel::Dcel can split an edge that has a twin and the twin will be split appropriately also.
+//! This differs from SplitEdgeWithTwin in that it passes an edge that was created indirectly as a twin to splitEdge instead
+//! of an edge that was created directly
 TEST(Dcel, SplitEdgeWithTwin2)
 {
     Dcel dcel;
@@ -307,6 +306,7 @@ TEST(Dcel, SplitEdgeWithTwin2)
     EXPECT_TRUE(isValidResult.first) << isValidResult.second;
 }
 
+//! \test Test that dcel::Dcel can merge two regions and remove the unused edges
 TEST(Dcel, MergeRegions)
 {
     Dcel dcel;

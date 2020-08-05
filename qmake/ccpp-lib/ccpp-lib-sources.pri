@@ -10,7 +10,7 @@ HEADERS += \
     $$SOURCE_ROOT/ads/assertion.h \
     $$SOURCE_ROOT/ads/epsilon.h \
     \
-    $$CCPP_ROOT/ccpp.h \
+    $$CCPP_ROOT/quickopp.h \
     $$CCPP_ROOT/typedefs.h \
     $$CCPP_ROOT/angle-cost-sum.hpp \
     $$CCPP_ROOT/coordinate-transform.hpp \
@@ -51,6 +51,7 @@ SOURCES += \
     $$CCPP_ROOT/turn-cost/u-shaped.cpp \
     $$CCPP_ROOT/region-merger/region-merger.cpp \
     $$CCPP_ROOT/swath-and-region-producer/swath-and-region-producer.cpp \
+    $$CCPP_ROOT/quickopp.cpp \
     \
     $$SWEEP_ROOT/active-edges-list.cpp \
     $$SWEEP_ROOT/edge.cpp \

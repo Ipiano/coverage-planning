@@ -11,6 +11,9 @@ namespace ccpp
 namespace interfaces
 {
 
+/*!
+ * \brief Interface for the final step of the ccpp algorithm which produces the final regions and swaths as output
+ */
 class SwathAndRegionProducerIf
 {
   public:

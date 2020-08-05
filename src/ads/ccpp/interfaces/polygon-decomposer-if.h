@@ -12,6 +12,9 @@ namespace ccpp
 namespace interfaces
 {
 
+/*!
+ * \brief Interface for the polygon decomposition step of the ccpp algorithm
+ */
 class PolygonDecomposerIf
 {
   public:

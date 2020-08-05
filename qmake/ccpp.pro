@@ -20,4 +20,5 @@ geographiclib.file = $$PWD/geographiclib/geographiclib.pro
 geojson-plugin.file = $$PWD/ccpp-tool/plugins/geojson-plugin.pro
 
 DISTFILES += $$PWD/../Doxyfile \
-             $$PWD/../.gitignore
+             $$PWD/../.gitignore \
+             $$PWD/../README.md

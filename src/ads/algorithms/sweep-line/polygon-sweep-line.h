@@ -38,12 +38,14 @@ namespace sweep_line
  *
  * The notable exception to this sorting method is when there is a zig-zag like this example
  *
- * *-a-*
- *     |
- *     b
- *     |
- *     *-c-*
- *
+ * \verbatim
+  *-a-*
+      |
+      b
+      |
+      *-c-*
+   \endverbatim
+
  * according to the rules above, the edges should be ordered
  *
  * a -> c -> b. However, they will be ordered a -> b -> c as it is often useful
