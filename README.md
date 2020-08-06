@@ -32,6 +32,35 @@ The algorithm (dubbed QuickOpp) defined by Theresa Driscoll in her 2011 thesis a
 has an emphasis on agriculture. The QuickOpp algorithm is a redesign of the algorithm designed by Jin<sup>2</sup> with the goal
 of reducing computational complexity. This project is an implemetation of Theresa Drisoll's work.
 
+## Definitions
+### Ring/Loop
+A collection of points ordered such that they define a closed area.
+
+### Polygon
+A collection of rings, such that there is one clockwise ring defining an outermost boundary
+and zero or more counter-clockwise disjoint rings contained entirely within the outer ring which
+define 'holes' or areas that are not to be included.
+
+### Left/Right/Above/Below
+These terms are used with respect to the coordinate grid to indicate
+* Left - Has an X coordinate which is less than
+* Right - Has an X coordinate which is greater than
+* Above - Has a Y coordinate which is greater than
+* Below - Has a Y coordinate which is greater than
+
+### Swath
+A single straight-line path across a shape which is associated with a width, such that
+multiple such lines arranged next to each other would cover the entire area.
+
+### Region
+A sub-area within a polygon
+
+### DCEL
+[Doubly-Connected Edge List](https://en.wikipedia.org/wiki/Doubly_connected_edge_list). Within
+this project, each half-edge in a DCEL may be referred to as an 'edge' depending on context, and
+each half-edge is not required to have a twin; as the regions considered to be 'outside' the shape
+or within holes in the shape are not represented.
+
 ## Project Contents
 This project is an implementation in three parts
 * A C++ library, implemented without dependency on Qt, to perform the QuickOpp algorithm.
@@ -132,7 +161,7 @@ the library does not need to know about their existance, inherit from them, or i
 them.
 
 ### Usage
-The following code snippet shows the minimum requirements to use the library to execute the QuickOpp algorithm:
+The following code snippet shows how to use the library to execute the QuickOpp algorithm:
 ```
 #include "ads/ccpp/quickopp.h"
 #include "ads/ccpp/turn-cost/u-shaped.h"
@@ -173,6 +202,51 @@ QuickOpp paper. It will likely be desirable for users to implement their own cos
 like a bow-tie or bulb-shaped turn.
 
 ## Algorithmic Description
+
+The QuickOpp algorithm is defined with 2 main steps
+1. Decompose the input shape with a modified trapezoidal decomposition algorithm
+2. Re-combine adjacent regions when doing so can reduce the overall cost of covering the shape
+
+Obviously, this is a massive simplification of what's going on, but those are effectively the key pieces of the
+algorithm. Breaking it down a little further, we can pull out a few more steps related to cost calculations
+1. For each direction in a range, find the cost of covering the shape with all swaths going the given direction. Find the cheapest option.
+2. Orient the sweep-line for the decomposition step so that it moves across the shape perpendicular to this best overall case (the sweep-line itself is parallel to the best-case direction)
+    - This will bias the decomposition to producing long, thin regions which are parallel to the best-case overall direction
+    - The sweep-line algorithm should break the shape more often than just at the start and end of inner loops (this is the 'modified' part).
+        A region should be created when the adjacent edges of the original shape differ in angle by more than some delta. (10 degrees was chosen for the original paper)
+3. Use a depth-first-traversal to visit all regions in the shape, traveling from a region to any adjacent regions (regions that share an edge)
+    - For each pair of adjacent regions, consider the cost of combining them vs. keeping them separate
+    - If the cost of covering them when combined is cheaper than leaving them separate, then mark them combined
+
+For further details on how the algorithm is defined, see the original paper.
+
+### Modifications
+
+As is the case when creating an implementation of an algorithm, some changes will be made either to suit the needs of the writer or to
+resolve ambiguities in the description. In this case, some changes were made for both reasons.
+
+* The original algorithm defines that regions should be created during the sweep-line algorithm both when first
+and last encountering an inner loop and when the edges of the shape differ in angle too far. It also indicates that
+regions should be created when the sweep line has moved at least as far as a single swath's width, but it is not entirely
+clear what this gains. The sweep-line algorithm has been un-modified, and written as a standard trapezoidal-decomposition,
+and an extra step has been added to sweep across each region a second time and split it further based on adjacent angles
+of edges (checking the distance of the sweep line was removed because it is not clear how that is intended to work). This
+change was made to reduce the requirements of the sweep-line algorithm, making it a more standard and objective function which
+can more-easily be unit-tested for correctness, and keeping it from getting overly complicated from a bookkeeping perspective.
+This should not affect the overall complexity of the algorithm; it just adds a second sweep across the shape, which adds a constant
+factor to the runtime. The overall affect on the algorithm is that it may split regions up differently than originally intended.
+* The original algorithm states that any region in the decomposed shape will have at most 2 adjacent regions to it, one on
+each side. It's unclear exactly how this is accomplished, as it is very easy to see how a region could have more than just
+two adjacent regions. It appears that it is accomplished by way of 0-area regions which run along the height of the shape before
+splitting off to an upper or lower section (above or below an inner loop). While this may technically work, it is not particularly
+practical after the fact; either it becomes necessary to post-process the solution to remove these geometrically invalid areas, or
+algorithms following QuickOpp must be able to process them correctly. This library aims to solve this problem by instead relaxing the '2 adjacent regions'
+rule and connecting adjacent regions as one might logically expect. While this changes some of the dynamic of the merge step at the end,
+it should not affect the runtime significantly.
+* The original algorithm is defined as 'building the output DCEL' during the decomposition, and defines points at which
+edges should be created, linked, and added to it. All logic related to creating and maintaining the DCEL has been isolated
+to a testable set of classes which maintains various DCEL invariants at all times, guaranteeing that the output is valid.
+As such, the decomposition step has been slightly modified with regard to how the DCEL is populated.
 
 ## References
 <sup>1</sup>Driscoll, Theresa Marie, "Complete coverage path planning in an agricultural environment" (2011).Graduate Theses and Dissertations. 12095. https://lib.dr.iastate.edu/etd/12095
