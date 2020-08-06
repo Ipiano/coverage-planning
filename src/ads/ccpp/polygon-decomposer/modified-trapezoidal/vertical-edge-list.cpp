@@ -26,9 +26,12 @@ struct VerticalEdgeLessThan
      * \param r Second half edge
      * \return True if they should be sorted l before r
      */
-    bool operator()(const dcel::HalfEdge l, const dcel::HalfEdge r)
+    bool operator()(const dcel::HalfEdge l, const dcel::HalfEdge r) const { return operator()(l.origin(), r.origin()); }
+    bool operator()(const dcel::HalfEdge l, const dcel::Vertex r) const { return operator()(l.origin(), r); }
+    bool operator()(const dcel::Vertex l, const dcel::HalfEdge r) const { return operator()(l, r.origin()); }
+    bool operator()(const dcel::Vertex l, const dcel::Vertex r) const
     {
-        return algorithms::sweep_line::pointLessThan(l.next().origin().point(), r.origin().point());
+        return algorithms::sweep_line::pointLessThan(l.point(), r.point());
     }
 };
 

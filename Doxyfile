@@ -829,7 +829,7 @@ WARN_LOGFILE           =
 # spaces. See also FILE_PATTERNS and EXTENSION_MAPPING
 # Note: If this tag is empty the current directory is searched.
 
-INPUT                  = src/ README.md
+INPUT                  = src README.md gtests
 
 # This tag can be used to specify the character encoding of the source files
 # that doxygen parses. Internally doxygen uses the UTF-8 encoding. Doxygen uses
@@ -2200,7 +2200,9 @@ INCLUDE_FILE_PATTERNS  =
 # This tag requires that the tag ENABLE_PREPROCESSING is set to YES.
 
 PREDEFINED             = "BOOST_CONCEPT_REQUIRES(A, B)=B" \
-                         "BOOST_CONCEPT_USAGE(X)=check()"
+                         "BOOST_CONCEPT_USAGE(X)=check()" \
+                         "TEST(A, B)=class TEST_##A##_##B" \
+                         "INSTANTIATE_TEST_SUITE_P(A, B, C)=class A { auto _ = C; }"
 
 # If the MACRO_EXPANSION and EXPAND_ONLY_PREDEF tags are set to YES then this
 # tag can be used to specify a list of macro names that should be expanded. The

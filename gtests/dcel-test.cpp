@@ -6,6 +6,8 @@ using namespace ads::dcel;
 using namespace ads;
 namespace bg = boost::geometry;
 
+namespace tests
+{
 bool equal(const ccpp::geometry::Point2d& p1, const ccpp::geometry::Point2d& p2)
 {
     return std::abs(bg::distance(p1, p2)) < 0.001;
@@ -338,4 +340,5 @@ TEST(Dcel, MergeRegions)
 
     const auto isValidResult = dcel.isValid();
     EXPECT_TRUE(isValidResult.first) << isValidResult.second;
+}
 }

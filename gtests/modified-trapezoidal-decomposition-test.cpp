@@ -16,6 +16,8 @@ using namespace ads;
 using namespace ccpp;
 namespace bg = boost::geometry;
 
+namespace tests
+{
 // Utility functions
 std::string to_string(const geometry::Point2d& pt)
 {
@@ -435,7 +437,20 @@ const std::vector<PolygonAndDcel> permuteCompositions(const std::vector<geometry
 INSTANTIATE_TEST_SUITE_P(CCPPTests_Basic, ModifiedTrapezoidalPolygonDecomposition,
                          ValuesIn(permuteCompositions({SQUARE, DIAMOND, HEXAGON_VERTICAL, HEXAGON_HORIZONTAL, OCTOGON, DODECAHEDRON})));
 
-// Tests for when there are weird convexities on the left side of the outer loop
+//! \brief Test suite of cases for a polygon with a single hole where the outer loop has
+//! convex points on the left side
+//!
+//! Example:
+/*! \verbatim
+  |----------------|
+  |                |
+  /  |----------|  |
+ |   |          |  |
+ |   |          |  |
+  \  |----------|  |
+  |                |
+  |----------------|
+\endverbatim */
 INSTANTIATE_TEST_SUITE_P(
     CCPPTests_Convexities_Outer_Left, ModifiedTrapezoidalPolygonDecomposition,
     Values(
@@ -490,18 +505,31 @@ INSTANTIATE_TEST_SUITE_P(
 
         ));
 
-// Tests for when there are weird convexities on the left side of the inner loop
+//! \brief Test suite of cases for a polygon with a single hole where the inner loop has
+//! convex points on the left side
+//!
+//! Example:
+/*! \verbatim
+ |----------------|
+ |                |
+ |    |--------|  |
+ |    /        |  |
+ |    \        |  |
+ |    |--------|  |
+ |                |
+ |----------------|
+\endverbatim */
 INSTANTIATE_TEST_SUITE_P(
     CCPPTests_Convexities_Inner_Left, ModifiedTrapezoidalPolygonDecomposition,
     Values(
-        //! \test Test decomposition with o single-point convexity on opening side of inner loop
+        //! \test Test decomposition with one single-point convexity on opening side of inner loop
         PolygonAndDcel{{{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{4, 2}, {4, 4}, {3, 5}, {4, 6}, {4, 8}, {8, 8}, {8, 2}}}},
                        {{{{0, 0}, {0, 10}, {3, 10}, {3, 5}, {3, 0}},
                          {{3, 10}, {8, 10}, {8, 8}, {4, 8}, {4, 6}, {3, 5}},
                          {{3, 0}, {3, 5}, {4, 4}, {4, 2}, {8, 2}, {8, 0}},
                          {{8, 0}, {8, 2}, {8, 8}, {8, 10}, {10, 10}, {10, 0}}}}},
 
-        //! \test Test decomposition with o multi-point convexity on opening side of inner loop
+        //! \test Test decomposition with one multi-point convexity on opening side of inner loop
         PolygonAndDcel{
             {{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{4, 2}, {4, 4}, {3, 4.25}, {2, 5}, {3, 5.75}, {4, 6}, {4, 8}, {8, 8}, {8, 2}}}},
             {{{{0, 0}, {0, 10}, {2, 10}, {2, 5}, {2, 0}},
@@ -509,21 +537,21 @@ INSTANTIATE_TEST_SUITE_P(
               {{2, 0}, {2, 5}, {3, 4.25}, {4, 4}, {4, 2}, {8, 2}, {8, 0}},
               {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
 
-        //! \test Test decomposition with o single-point convexity as the opening side of inner loop
+        //! \test Test decomposition with one single-point convexity as the opening side of inner loop
         PolygonAndDcel{{{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{4, 2}, {3, 5}, {4, 8}, {8, 8}, {8, 2}}}},
                        {{{{0, 0}, {0, 10}, {3, 10}, {3, 5}, {3, 0}},
                          {{3, 5}, {3, 10}, {8, 10}, {8, 8}, {4, 8}},
                          {{3, 5}, {4, 2}, {8, 2}, {8, 0}, {3, 0}},
                          {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
 
-        //! \test Test decomposition with o multi-point convexity as the opening side of inner loop
+        //! \test Test decomposition with one multi-point convexity as the opening side of inner loop
         PolygonAndDcel{{{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{4, 2}, {3, 3}, {2, 5}, {3, 7}, {4, 8}, {8, 8}, {8, 2}}}},
                        {{{{0, 0}, {0, 10}, {2, 10}, {2, 5}, {2, 0}},
                          {{2, 5}, {2, 10}, {8, 10}, {8, 8}, {4, 8}, {3, 7}},
                          {{2, 5}, {3, 3}, {4, 2}, {8, 2}, {8, 0}, {2, 0}},
                          {{8, 8}, {8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}}}}},
 
-        //! \test Test decomposition with t single-point convexities on opening side of inner loop
+        //! \test Test decomposition with two single-point convexities on opening side of inner loop
         PolygonAndDcel{
             {{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{4, 2}, {4, 3}, {3, 3.5}, {4, 4}, {4, 6}, {3, 6.5}, {4, 7}, {4, 8}, {8, 8}, {8, 2}}}},
             {{{{0, 0}, {0, 10}, {3, 10}, {3, 6.5}, {3, 3.5}, {3, 0}},
@@ -532,7 +560,7 @@ INSTANTIATE_TEST_SUITE_P(
               {{3, 0}, {3, 3.5}, {4, 3}, {4, 2}, {8, 2}, {8, 0}},
               {{8, 0}, {8, 2}, {8, 8}, {8, 10}, {10, 10}, {10, 0}}}}},
 
-        //! \test Test decomposition with t multi-point convexities on opening side of inner loop
+        //! \test Test decomposition with two multi-point convexities on opening side of inner loop
         PolygonAndDcel{{{{0, 0}, {0, 10}, {10, 10}, {10, 0}},
                         {{{4, 2},
                           {4, 3},
@@ -554,7 +582,7 @@ INSTANTIATE_TEST_SUITE_P(
                          {{2, 3.5}, {3.75, 3.25}, {4, 3}, {4, 2}, {8, 2}, {8, 0}, {2, 0}},
                          {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
 
-        //! \test Test decomposition with t single-point convexities as the opening side of inner loop
+        //! \test Test decomposition with two single-point convexities as the opening side of inner loop
         PolygonAndDcel{{{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{4, 2}, {3, 4}, {4, 5}, {3, 6}, {4, 8}, {8, 8}, {8, 2}}}},
                        {{{{0, 0}, {0, 10}, {3, 10}, {3, 6}, {3, 4}, {3, 0}},
                          {{3, 6}, {4, 5}, {3, 4}},
@@ -562,7 +590,7 @@ INSTANTIATE_TEST_SUITE_P(
                          {{3, 4}, {4, 2}, {8, 2}, {8, 0}, {3, 0}},
                          {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
 
-        //! \test Test decomposition with t multi-point convexities as the opening side of inner loop
+        //! \test Test decomposition with two multi-point convexities as the opening side of inner loop
         PolygonAndDcel{{{{0, 0}, {0, 10}, {10, 10}, {10, 0}},
                         {{{4, 2}, {3, 2.5}, {2, 4}, {3, 4.75}, {4, 5}, {3, 5.25}, {2, 6}, {3, 7.5}, {4, 8}, {8, 8}, {8, 2}}}},
                        {{{{0, 0}, {0, 10}, {2, 10}, {2, 6}, {2, 4}, {2, 0}},
@@ -573,32 +601,45 @@ INSTANTIATE_TEST_SUITE_P(
 
         ));
 
-// Tests for when there are weird convexities on the right side of the outer loop
+//! \brief Test suite of cases for a polygon with a single hole where the outer loop has
+//! convex points on the right side
+//!
+//! Example:
+/*! \verbatim
+ |----------------|
+ |                |
+ |    |--------|  \
+ |    |        |   |
+ |    |        |   |
+ |    |--------|  /
+ |                |
+ |----------------|
+\endverbatim */
 INSTANTIATE_TEST_SUITE_P(
     CCPPTests_Convexities_Outer_Right, ModifiedTrapezoidalPolygonDecomposition,
     Values(
-        //! \test Test decomposition with o single-point convexity on closing side of outer loop
+        //! \test Test decomposition with one single-point convexity on closing side of outer loop
         PolygonAndDcel{{{{-3, 0}, {-3, -3}, {0, -5}, {-3, -7}, {-3, -10}, {-10, -10}, {-10, 0}}},
                        {{{{-3, 0}, {-3, -3}, {0, -5}, {-3, -7}, {-3, -10}, {-10, -10}, {-10, 0}}}}},
 
-        //! \test Test decomposition with o multi-point convexity on closing side of outer loop
+        //! \test Test decomposition with one multi-point convexity on closing side of outer loop
         PolygonAndDcel{{{{-3, 0}, {-3, -2}, {-2, -3}, {-1, -5}, {-2, -7}, {-3, -8}, {-3, -10}, {-10, -10}, {-10, 0}}},
                        {{{{-3, 0}, {-3, -2}, {-2, -3}, {-1, -5}, {-2, -7}, {-3, -8}, {-3, -10}, {-10, -10}, {-10, 0}}}}},
 
-        //! \test Test decomposition with o single-point convexity as the closing side of outer loop
+        //! \test Test decomposition with one single-point convexity as the closing side of outer loop
         PolygonAndDcel{{{{-3, 0}, {0, -5}, {-3, -10}, {-10, -10}, {-10, 0}}}, {{{{-3, 0}, {0, -5}, {-3, -10}, {-10, -10}, {-10, 0}}}}},
 
-        //! \test Test decomposition with o multi-point convexity as the closing side of outer loop
+        //! \test Test decomposition with one multi-point convexity as the closing side of outer loop
         PolygonAndDcel{{{{-3, 0}, {-1, -1}, {0, -5}, {-1, -9}, {-3, -10}, {-10, -10}, {-10, 0}}},
                        {{{{-3, 0}, {-1, -1}, {0, -5}, {-1, -9}, {-3, -10}, {-10, -10}, {-10, 0}}}}},
 
-        //! \test Test decomposition with t single-point convexities on closing side of outer loop
+        //! \test Test decomposition with two single-point convexities on closing side of outer loop
         PolygonAndDcel{{{{-3, 0}, {-3, -2}, {0, -3}, {-3, -4}, {-3, -6}, {0, -7}, {-3, -8}, {-3, -10}, {-10, -10}, {-10, 0}}},
                        {{{{-3, -2}, {0, -3}, {-3, -4}},
                          {{-3, -6}, {0, -7}, {-3, -8}},
                          {{-3, 0}, {-3, -2}, {-3, -4}, {-3, -6}, {-3, -8}, {-3, -10}, {-10, -10}, {-10, 0}}}}},
 
-        //! \test Test decomposition with t multi-point convexities on closing side of outer loop
+        //! \test Test decomposition with two multi-point convexities on closing side of outer loop
         PolygonAndDcel{{{{-3, 0},
                          {-3, -2},
                          {-2, -2.25},
@@ -617,12 +658,12 @@ INSTANTIATE_TEST_SUITE_P(
                          {{-3, -6}, {-2, -6.25}, {0, -7}, {-2, -7.75}, {-3, -8}},
                          {{-3, 0}, {-3, -2}, {-3, -4}, {-3, -6}, {-3, -8}, {-3, -10}, {-10, -10}, {-10, 0}}}}},
 
-        //! \test Test decomposition with t single-point convexities as the closing side of outer loop
+        //! \test Test decomposition with two single-point convexities as the closing side of outer loop
         PolygonAndDcel{
             {{{-3, 0}, {-1, -3}, {-3, -5}, {-1, -7}, {-3, -10}, {-10, -10}, {-10, 0}}},
             {{{{-3, 0}, {-1, -3}, {-3, -5}}, {{-3, -5}, {-1, -7}, {-3, -10}}, {{-3, 0}, {-3, -5}, {-3, -10}, {-10, -10}, {-10, 0}}}}},
 
-        //! \test Test decomposition with t multi-point convexities as the closing side of outer loop
+        //! \test Test decomposition with two multi-point convexities as the closing side of outer loop
         PolygonAndDcel{
             {{{-3, 0}, {-2, -1}, {-1, -3}, {-2, -3.75}, {-3, -5}, {-2, -5.25}, {-1, -7}, {-2, -9}, {-3, -10}, {-10, -10}, {-10, 0}}},
             {{{{-3, 0}, {-2, -1}, {-1, -3}, {-2, -3.75}, {-3, -5}},
@@ -631,18 +672,31 @@ INSTANTIATE_TEST_SUITE_P(
 
         ));
 
-// Tests for when there are weird convexities on the right side of the inner loop
+//! \brief Test suite of cases for a polygon with a single hole where the inner loop has
+//! convex points on the right side
+//!
+//! Example:
+/*! \verbatim
+ |----------------|
+ |                |
+ |   |--------|   |
+ |   |        \   |
+ |   |        /   |
+ |   |--------|   |
+ |                |
+ |----------------|
+\endverbatim */
 INSTANTIATE_TEST_SUITE_P(
     CCPPTests_Convexities_Inner_Right, ModifiedTrapezoidalPolygonDecomposition,
     Values(
-        //! \test Test decomposition with o single-point convexity on closing side of inner loop
+        //! \test Test decomposition with one single-point convexity on closing side of inner loop
         PolygonAndDcel{{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}}, {{{-4, -2}, {-4, -4}, {-3, -5}, {-4, -6}, {-4, -8}, {-8, -8}, {-8, -2}}}},
                        {{{{0, 0}, {0, -10}, {-3, -10}, {-3, -5}, {-3, 0}},
                          {{-3, -10}, {-8, -10}, {-8, -8}, {-4, -8}, {-4, -6}, {-3, -5}},
                          {{-3, 0}, {-3, -5}, {-4, -4}, {-4, -2}, {-8, -2}, {-8, 0}},
                          {{-8, 0}, {-8, -2}, {-8, -8}, {-8, -10}, {-10, -10}, {-10, 0}}}}},
 
-        //! \test Test decomposition with o multi-point convexity on closing side of inner loop
+        //! \test Test decomposition with one multi-point convexity on closing side of inner loop
         PolygonAndDcel{{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}},
                         {{{-4, -2}, {-4, -4}, {-3, -4.25}, {-2, -5}, {-3, -5.75}, {-4, -6}, {-4, -8}, {-8, -8}, {-8, -2}}}},
                        {{{{0, 0}, {0, -10}, {-2, -10}, {-2, -5}, {-2, 0}},
@@ -650,21 +704,21 @@ INSTANTIATE_TEST_SUITE_P(
                          {{-2, 0}, {-2, -5}, {-3, -4.25}, {-4, -4}, {-4, -2}, {-8, -2}, {-8, 0}},
                          {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
 
-        //! \test Test decomposition with o single-point convexity as the closing side of inner loop
+        //! \test Test decomposition with one single-point convexity as the closing side of inner loop
         PolygonAndDcel{{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}}, {{{-4, -2}, {-3, -5}, {-4, -8}, {-8, -8}, {-8, -2}}}},
                        {{{{0, 0}, {0, -10}, {-3, -10}, {-3, -5}, {-3, 0}},
                          {{-3, -5}, {-3, -10}, {-8, -10}, {-8, -8}, {-4, -8}},
                          {{-3, -5}, {-4, -2}, {-8, -2}, {-8, 0}, {-3, 0}},
                          {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
 
-        //! \test Test decomposition with o multi-point convexity as the closing side of inner loop
+        //! \test Test decomposition with one multi-point convexity as the closing side of inner loop
         PolygonAndDcel{{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}}, {{{-4, -2}, {-3, -3}, {-2, -5}, {-3, -7}, {-4, -8}, {-8, -8}, {-8, -2}}}},
                        {{{{0, 0}, {0, -10}, {-2, -10}, {-2, -5}, {-2, 0}},
                          {{-2, -5}, {-2, -10}, {-8, -10}, {-8, -8}, {-4, -8}, {-3, -7}},
                          {{-2, -5}, {-3, -3}, {-4, -2}, {-8, -2}, {-8, 0}, {-2, 0}},
                          {{-8, -8}, {-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}}}}},
 
-        //! \test Test decomposition with t single-point convexities on closing side of inner loop
+        //! \test Test decomposition with two single-point convexities on closing side of inner loop
         PolygonAndDcel{{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}},
                         {{{-4, -2}, {-4, -3}, {-3, -3.5}, {-4, -4}, {-4, -6}, {-3, -6.5}, {-4, -7}, {-4, -8}, {-8, -8}, {-8, -2}}}},
                        {{{{0, 0}, {0, -10}, {-3, -10}, {-3, -6.5}, {-3, -3.5}, {-3, 0}},
@@ -673,7 +727,7 @@ INSTANTIATE_TEST_SUITE_P(
                          {{-3, 0}, {-3, -3.5}, {-4, -3}, {-4, -2}, {-8, -2}, {-8, 0}},
                          {{-8, 0}, {-8, -2}, {-8, -8}, {-8, -10}, {-10, -10}, {-10, 0}}}}},
 
-        //! \test Test decomposition with t multi-point convexities on closing side of inner loop
+        //! \test Test decomposition with two multi-point convexities on closing side of inner loop
         PolygonAndDcel{{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}},
                         {{{-4, -2},
                           {-4, -3},
@@ -695,7 +749,7 @@ INSTANTIATE_TEST_SUITE_P(
                          {{-2, -3.5}, {-3.75, -3.25}, {-4, -3}, {-4, -2}, {-8, -2}, {-8, 0}, {-2, 0}},
                          {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
 
-        //! \test Test decomposition with t single-point convexities as the closing side of inner loop
+        //! \test Test decomposition with two single-point convexities as the closing side of inner loop
         PolygonAndDcel{{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}}, {{{-4, -2}, {-3, -4}, {-4, -5}, {-3, -6}, {-4, -8}, {-8, -8}, {-8, -2}}}},
                        {{{{0, 0}, {0, -10}, {-3, -10}, {-3, -6}, {-3, -4}, {-3, 0}},
                          {{-3, -6}, {-4, -5}, {-3, -4}},
@@ -703,7 +757,7 @@ INSTANTIATE_TEST_SUITE_P(
                          {{-3, -4}, {-4, -2}, {-8, -2}, {-8, 0}, {-3, 0}},
                          {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
 
-        //! \test Test decomposition with t multi-point convexities as the closing side of inner loop
+        //! \test Test decomposition with two multi-point convexities as the closing side of inner loop
         PolygonAndDcel{
             {{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}},
              {{{-4, -2}, {-3, -2.5}, {-2, -4}, {-3, -4.75}, {-4, -5}, {-3, -5.25}, {-2, -6}, {-3, -7.5}, {-4, -8}, {-8, -8}, {-8, -2}}}},
@@ -715,38 +769,51 @@ INSTANTIATE_TEST_SUITE_P(
 
         ));
 
-// Tests for when there are weird concavities on the left side of the outer loop
+//! \brief Test suite of cases for a polygon with a single hole where the outer loop has
+//! concavities on the left side
+//!
+//! Example:
+/*! \verbatim
+ |----------------|
+ |                |
+ \    |--------|  |
+  |   |        |  |
+  |   |        |  |
+ /    |--------|  |
+ |                |
+ |----------------|
+\endverbatim */
 INSTANTIATE_TEST_SUITE_P(
     CCPPTests_Concavities_Outer_Left, ModifiedTrapezoidalPolygonDecomposition,
     Values(
-        //! \test Test decomposition with o single-point concavity on opening side of outer loop
+        //! \test Test decomposition with one single-point concavity on opening side of outer loop
         PolygonAndDcel{
             {{{0, 0}, {0, 3}, {2, 5}, {0, 7}, {0, 10}, {10, 10}, {10, 0}}},
             {{{{0, 0}, {0, 3}, {2, 5}, {2, 0}}, {{0, 7}, {0, 10}, {2, 10}, {2, 5}}, {{2, 5}, {2, 10}, {10, 10}, {10, 0}, {2, 0}}}}},
 
-        //! \test Test decomposition with o multi-point concavity on opening side of outer loop
+        //! \test Test decomposition with one multi-point concavity on opening side of outer loop
         PolygonAndDcel{{{{0, 0}, {0, 2}, {1, 3}, {2, 5}, {1, 7}, {0, 8}, {0, 10}, {10, 10}, {10, 0}}},
                        {{{{0, 0}, {0, 2}, {1, 3}, {2, 5}, {2, 0}},
                          {{0, 8}, {0, 10}, {2, 10}, {2, 5}, {1, 7}},
                          {{2, 5}, {2, 10}, {10, 10}, {10, 0}, {2, 0}}}}},
 
-        //! \test Test decomposition with o single-point concavity as the opening side of outer loop
+        //! \test Test decomposition with one single-point concavity as the opening side of outer loop
         PolygonAndDcel{{{{0, 0}, {2, 5}, {0, 10}, {10, 10}, {10, 0}}},
                        {{{{0, 0}, {2, 5}, {2, 0}}, {{0, 10}, {2, 10}, {2, 5}}, {{2, 5}, {2, 10}, {10, 10}, {10, 0}, {2, 0}}}}},
 
-        //! \test Test decomposition with o multi-point concavity as the opening side of outer loop
+        //! \test Test decomposition with one multi-point concavity as the opening side of outer loop
         PolygonAndDcel{
             {{{0, 0}, {1, 1}, {2, 5}, {1, 9}, {0, 10}, {10, 10}, {10, 0}}},
             {{{{0, 0}, {1, 1}, {2, 5}, {2, 0}}, {{0, 10}, {2, 10}, {2, 5}, {1, 9}}, {{2, 5}, {2, 10}, {10, 10}, {10, 0}, {2, 0}}}}},
 
-        //! \test Test decomposition with t single-point concavities on opening side of outer loop
+        //! \test Test decomposition with two single-point concavities on opening side of outer loop
         PolygonAndDcel{{{{0, 0}, {0, 2}, {2, 3}, {0, 4}, {0, 6}, {2, 7}, {0, 8}, {0, 10}, {10, 10}, {10, 0}}},
                        {{{{0, 0}, {0, 2}, {2, 3}, {2, 0}},
                          {{2, 3}, {0, 4}, {0, 6}, {2, 7}},
                          {{0, 8}, {0, 10}, {2, 10}, {2, 7}},
                          {{2, 3}, {2, 7}, {2, 10}, {10, 10}, {10, 0}, {2, 0}}}}},
 
-        //! \test Test decomposition with t multi-point concavities on opening side of outer loop
+        //! \test Test decomposition with two multi-point concavities on opening side of outer loop
         PolygonAndDcel{{{{0, 0},
                          {0, 2},
                          {1, 2.25},
@@ -766,14 +833,14 @@ INSTANTIATE_TEST_SUITE_P(
                          {{0, 8}, {0, 10}, {2, 10}, {2, 7}, {1, 7.75}},
                          {{2, 3}, {2, 7}, {2, 10}, {10, 10}, {10, 0}, {2, 0}}}}},
 
-        //! \test Test decomposition with t single-point concavities as the opening side of outer loop
+        //! \test Test decomposition with two single-point concavities as the opening side of outer loop
         PolygonAndDcel{{{{0, 0}, {2, 3}, {0, 5}, {2, 7}, {0, 10}, {10, 10}, {10, 0}}},
                        {{{{0, 0}, {2, 3}, {2, 0}},
                          {{2, 3}, {0, 5}, {2, 7}},
                          {{0, 10}, {2, 10}, {2, 7}},
                          {{2, 3}, {2, 7}, {2, 10}, {10, 10}, {10, 0}, {2, 0}}}}},
 
-        //! \test Test decomposition with t multi-point concavities as the opening side of outer loop
+        //! \test Test decomposition with two multi-point concavities as the opening side of outer loop
         PolygonAndDcel{{{{0, 0}, {1, 1}, {2, 3}, {1, 3.75}, {0, 5}, {1, 5.25}, {2, 7}, {1, 9}, {0, 10}, {10, 10}, {10, 0}}},
                        {{{{0, 0}, {1, 1}, {2, 3}, {2, 0}},
                          {{2, 3}, {1, 3.75}, {0, 5}, {1, 5.25}, {2, 7}},
@@ -782,11 +849,24 @@ INSTANTIATE_TEST_SUITE_P(
 
         ));
 
-// Tests for when there are weird concavities on the left side of the inner loop
+//! \brief Test suite of cases for a polygon with a single hole where the inner loop has
+//! concavities on the left side
+//!
+//! Example:
+/*! \verbatim
+ |----------------|
+ |                |
+ |    |--------|  |
+ |    \        |  |
+ |    /        |  |
+ |    |--------|  |
+ |                |
+ |----------------|
+\endverbatim */
 INSTANTIATE_TEST_SUITE_P(
     CCPPTests_Concavities_Inner_Left, ModifiedTrapezoidalPolygonDecomposition,
     Values(
-        //! \test Test decomposition with o single-point concavity on opening side of inner loop
+        //! \test Test decomposition with one single-point concavity on opening side of inner loop
         PolygonAndDcel{{{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{2, 2}, {2, 4}, {3, 5}, {2, 6}, {2, 8}, {8, 8}, {8, 2}}}},
                        {{{{0, 0}, {0, 10}, {2, 10}, {2, 8}, {2, 6}, {2, 4}, {2, 2}, {2, 0}},
                          {{2, 0}, {2, 2}, {8, 2}, {8, 0}},
@@ -794,7 +874,7 @@ INSTANTIATE_TEST_SUITE_P(
                          {{2, 8}, {2, 10}, {8, 10}, {8, 8}},
                          {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
 
-        //! \test Test decomposition with o multi-point concavity on opening side of inner loop
+        //! \test Test decomposition with one multi-point concavity on opening side of inner loop
         PolygonAndDcel{
             {{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{2, 2}, {2, 4}, {2.5, 4.25}, {3, 5}, {2.5, 5.75}, {2, 6}, {2, 8}, {8, 8}, {8, 2}}}},
             {{{{0, 0}, {0, 10}, {2, 10}, {2, 8}, {2, 6}, {2, 4}, {2, 2}, {2, 0}},
@@ -803,7 +883,7 @@ INSTANTIATE_TEST_SUITE_P(
               {{2, 8}, {2, 10}, {8, 10}, {8, 8}},
               {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
 
-        //! \test Test decomposition with o single-point concavity as the opening side of inner loop
+        //! \test Test decomposition with one single-point concavity as the opening side of inner loop
         PolygonAndDcel{{{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{2, 2}, {3, 5}, {2, 8}, {8, 8}, {8, 2}}}},
                        {{{{0, 0}, {0, 10}, {2, 10}, {2, 8}, {2, 2}, {2, 0}},
                          {{2, 0}, {2, 2}, {8, 2}, {8, 0}},
@@ -811,7 +891,7 @@ INSTANTIATE_TEST_SUITE_P(
                          {{2, 8}, {2, 10}, {8, 10}, {8, 8}},
                          {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
 
-        //! \test Test decomposition with o multi-point concavity as the opening side of inner loop
+        //! \test Test decomposition with one multi-point concavity as the opening side of inner loop
         PolygonAndDcel{{{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{2, 2}, {3, 3}, {4, 5}, {3, 7}, {2, 8}, {8, 8}, {8, 2}}}},
                        {{{{0, 0}, {0, 10}, {2, 10}, {2, 8}, {2, 2}, {2, 0}},
                          {{2, 0}, {2, 2}, {8, 2}, {8, 0}},
@@ -819,7 +899,7 @@ INSTANTIATE_TEST_SUITE_P(
                          {{2, 8}, {2, 10}, {8, 10}, {8, 8}},
                          {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
 
-        //! \test Test decomposition with t single-point concavities on opening side of inner loop
+        //! \test Test decomposition with two single-point concavities on opening side of inner loop
         PolygonAndDcel{
             {{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{2, 2}, {2, 3}, {3, 3.5}, {2, 4}, {2, 6}, {3, 6.5}, {2, 7}, {2, 8}, {8, 8}, {8, 2}}}},
             {{{{0, 0}, {0, 10}, {2, 10}, {2, 8}, {2, 7}, {2, 6}, {2, 4}, {2, 3}, {2, 2}, {2, 0}},
@@ -829,7 +909,7 @@ INSTANTIATE_TEST_SUITE_P(
               {{2, 8}, {2, 10}, {8, 10}, {8, 8}},
               {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
 
-        //! \test Test decomposition with t multi-point concavities on opening side of inner loop
+        //! \test Test decomposition with two multi-point concavities on opening side of inner loop
         PolygonAndDcel{{{{0, 0}, {0, 10}, {10, 10}, {10, 0}},
                         {{{2, 2},
                           {2, 3},
@@ -852,7 +932,7 @@ INSTANTIATE_TEST_SUITE_P(
                          {{2, 8}, {2, 10}, {8, 10}, {8, 8}},
                          {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
 
-        //! \test Test decomposition with t single-point concavities as the opening side of inner loop
+        //! \test Test decomposition with two single-point concavities as the opening side of inner loop
         PolygonAndDcel{{{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, {{{2, 2}, {3, 4}, {2, 5}, {3, 6}, {2, 8}, {8, 8}, {8, 2}}}},
                        {{{{0, 0}, {0, 10}, {2, 10}, {2, 8}, {2, 5}, {2, 2}, {2, 0}},
                          {{2, 0}, {2, 2}, {8, 2}, {8, 0}},
@@ -861,7 +941,7 @@ INSTANTIATE_TEST_SUITE_P(
                          {{2, 8}, {2, 10}, {8, 10}, {8, 8}},
                          {{8, 10}, {10, 10}, {10, 0}, {8, 0}, {8, 2}, {8, 8}}}}},
 
-        //! \test Test decomposition with t multi-point concavities as the opening side of inner loop
+        //! \test Test decomposition with two multi-point concavities as the opening side of inner loop
         PolygonAndDcel{{{{0, 0}, {0, 10}, {10, 10}, {10, 0}},
                         {{{2, 2}, {3, 2.5}, {4, 4}, {3, 4.75}, {2, 5}, {3, 5.25}, {4, 6}, {3, 7.5}, {2, 8}, {8, 8}, {8, 2}}}},
                        {{{{0, 0}, {0, 10}, {2, 10}, {2, 8}, {2, 5}, {2, 2}, {2, 0}},
@@ -873,41 +953,54 @@ INSTANTIATE_TEST_SUITE_P(
 
         ));
 
-// Tests for when there are weird concavities on the right side of the outer loop
+//! \brief Test suite of cases for a polygon with a single hole where the outer loop has
+//! concavities on the righthand side
+//!
+//! Example:
+/*! \verbatim
+ |----------------|
+ |                |
+ |  |--------|    /
+ |  |        |   |
+ |  |        |   |
+ |  |--------|    \
+ |                |
+ |----------------|
+\endverbatim */
 INSTANTIATE_TEST_SUITE_P(
     CCPPTests_Concavities_Outer_Right, ModifiedTrapezoidalPolygonDecomposition,
     Values(
-        //! \test Test decomposition with o single-point concavity on closing side of outer loop
+        //! \test Test decomposition with one single-point concavity on closing side of outer loop
         PolygonAndDcel{{{{0, 0}, {0, -3}, {-2, -5}, {0, -7}, {0, -10}, {-10, -10}, {-10, 0}}},
                        {{{{0, 0}, {0, -3}, {-2, -5}, {-2, 0}},
                          {{0, -7}, {0, -10}, {-2, -10}, {-2, -5}},
                          {{-2, -5}, {-2, -10}, {-10, -10}, {-10, 0}, {-2, 0}}}}},
 
-        //! \test Test decomposition with o multi-point concavity on closing side of outer loop
+        //! \test Test decomposition with one multi-point concavity on closing side of outer loop
         PolygonAndDcel{{{{0, 0}, {0, -2}, {-1, -3}, {-2, -5}, {-1, -7}, {0, -8}, {0, -10}, {-10, -10}, {-10, 0}}},
                        {{{{0, 0}, {0, -2}, {-1, -3}, {-2, -5}, {-2, 0}},
                          {{0, -8}, {0, -10}, {-2, -10}, {-2, -5}, {-1, -7}},
                          {{-2, -5}, {-2, -10}, {-10, -10}, {-10, 0}, {-2, 0}}}}},
 
-        //! \test Test decomposition with o single-point concavity as the closing side of outer loop
+        //! \test Test decomposition with one single-point concavity as the closing side of outer loop
         PolygonAndDcel{
             {{{0, 0}, {-2, -5}, {0, -10}, {-10, -10}, {-10, 0}}},
             {{{{0, 0}, {-2, -5}, {-2, 0}}, {{0, -10}, {-2, -10}, {-2, -5}}, {{-2, -5}, {-2, -10}, {-10, -10}, {-10, 0}, {-2, 0}}}}},
 
-        //! \test Test decomposition with o multi-point concavity as the closing side of outer loop
+        //! \test Test decomposition with one multi-point concavity as the closing side of outer loop
         PolygonAndDcel{{{{0, 0}, {-1, -1}, {-2, -5}, {-1, -9}, {0, -10}, {-10, -10}, {-10, 0}}},
                        {{{{0, 0}, {-1, -1}, {-2, -5}, {-2, 0}},
                          {{0, -10}, {-2, -10}, {-2, -5}, {-1, -9}},
                          {{-2, -5}, {-2, -10}, {-10, -10}, {-10, 0}, {-2, 0}}}}},
 
-        //! \test Test decomposition with t single-point concavities on closing side of outer loop
+        //! \test Test decomposition with two single-point concavities on closing side of outer loop
         PolygonAndDcel{{{{0, 0}, {0, -2}, {-2, -3}, {0, -4}, {0, -6}, {-2, -7}, {0, -8}, {0, -10}, {-10, -10}, {-10, 0}}},
                        {{{{0, 0}, {0, -2}, {-2, -3}, {-2, 0}},
                          {{-2, -3}, {0, -4}, {0, -6}, {-2, -7}},
                          {{0, -8}, {0, -10}, {-2, -10}, {-2, -7}},
                          {{-2, -3}, {-2, -7}, {-2, -10}, {-10, -10}, {-10, 0}, {-2, 0}}}}},
 
-        //! \test Test decomposition with t multi-point concavities on closing side of outer loop
+        //! \test Test decomposition with two multi-point concavities on closing side of outer loop
         PolygonAndDcel{{{{0, 0},
                          {0, -2},
                          {-1, -2.25},
@@ -927,14 +1020,14 @@ INSTANTIATE_TEST_SUITE_P(
                          {{0, -8}, {0, -10}, {-2, -10}, {-2, -7}, {-1, -7.75}},
                          {{-2, -3}, {-2, -7}, {-2, -10}, {-10, -10}, {-10, 0}, {-2, 0}}}}},
 
-        //! \test Test decomposition with t single-point concavities as the closing side of outer loop
+        //! \test Test decomposition with two single-point concavities as the closing side of outer loop
         PolygonAndDcel{{{{0, 0}, {-2, -3}, {0, -5}, {-2, -7}, {0, -10}, {-10, -10}, {-10, 0}}},
                        {{{{0, 0}, {-2, -3}, {-2, 0}},
                          {{-2, -3}, {0, -5}, {-2, -7}},
                          {{0, -10}, {-2, -10}, {-2, -7}},
                          {{-2, -3}, {-2, -7}, {-2, -10}, {-10, -10}, {-10, 0}, {-2, 0}}}}},
 
-        //! \test Test decomposition with t multi-point concavities as the closing side of outer loop
+        //! \test Test decomposition with two multi-point concavities as the closing side of outer loop
         PolygonAndDcel{
             {{{0, 0}, {-1, -1}, {-2, -3}, {-1, -3.75}, {0, -5}, {-1, -5.25}, {-2, -7}, {-1, -9}, {0, -10}, {-10, -10}, {-10, 0}}},
             {{{{0, 0}, {-1, -1}, {-2, -3}, {-2, 0}},
@@ -944,11 +1037,24 @@ INSTANTIATE_TEST_SUITE_P(
 
         ));
 
-// Tests for when there are weird concavities on the right side of the inner loop
+//! \brief Test suite of cases for a polygon with a single hole where the hole has
+//! concavities on the righthand side
+//!
+//! Example:
+/*! \verbatim
+ |----------------|
+ |                |
+ |  |----------|  |
+ |  |          /  |
+ |  |          \  |
+ |  |----------|  |
+ |                |
+ |----------------|
+\endverbatim */
 INSTANTIATE_TEST_SUITE_P(
     CCPPTests_Concavities_Inner_Right, ModifiedTrapezoidalPolygonDecomposition,
     Values(
-        //! \test Test decomposition with o single-point concavity on closing side of inner loop
+        //! \test Test decomposition with one single-point concavity on closing side of inner loop
         PolygonAndDcel{{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}}, {{{-2, -2}, {-2, -4}, {-3, -5}, {-2, -6}, {-2, -8}, {-8, -8}, {-8, -2}}}},
                        {{{{0, 0}, {0, -10}, {-2, -10}, {-2, -8}, {-2, -6}, {-2, -4}, {-2, -2}, {-2, 0}},
                          {{-2, 0}, {-2, -2}, {-8, -2}, {-8, 0}},
@@ -956,7 +1062,7 @@ INSTANTIATE_TEST_SUITE_P(
                          {{-2, -8}, {-2, -10}, {-8, -10}, {-8, -8}},
                          {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
 
-        //! \test Test decomposition with o multi-point concavity on closing side of inner loop
+        //! \test Test decomposition with one multi-point concavity on closing side of inner loop
         PolygonAndDcel{{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}},
                         {{{-2, -2}, {-2, -4}, {-2.5, -4.25}, {-3, -5}, {-2.5, -5.75}, {-2, -6}, {-2, -8}, {-8, -8}, {-8, -2}}}},
                        {{{{0, 0}, {0, -10}, {-2, -10}, {-2, -8}, {-2, -6}, {-2, -4}, {-2, -2}, {-2, 0}},
@@ -965,7 +1071,7 @@ INSTANTIATE_TEST_SUITE_P(
                          {{-2, -8}, {-2, -10}, {-8, -10}, {-8, -8}},
                          {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
 
-        //! \test Test decomposition with o single-point concavity as the closing side of inner loop
+        //! \test Test decomposition with one single-point concavity as the closing side of inner loop
         PolygonAndDcel{{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}}, {{{-2, -2}, {-3, -5}, {-2, -8}, {-8, -8}, {-8, -2}}}},
                        {{{{0, 0}, {0, -10}, {-2, -10}, {-2, -8}, {-2, -2}, {-2, 0}},
                          {{-2, 0}, {-2, -2}, {-8, -2}, {-8, 0}},
@@ -973,7 +1079,7 @@ INSTANTIATE_TEST_SUITE_P(
                          {{-2, -8}, {-2, -10}, {-8, -10}, {-8, -8}},
                          {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
 
-        //! \test Test decomposition with o multi-point concavity as the closing side of inner loop
+        //! \test Test decomposition with one multi-point concavity as the closing side of inner loop
         PolygonAndDcel{{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}}, {{{-2, -2}, {-3, -3}, {-4, -5}, {-3, -7}, {-2, -8}, {-8, -8}, {-8, -2}}}},
                        {{{{0, 0}, {0, -10}, {-2, -10}, {-2, -8}, {-2, -2}, {-2, 0}},
                          {{-2, 0}, {-2, -2}, {-8, -2}, {-8, 0}},
@@ -981,7 +1087,7 @@ INSTANTIATE_TEST_SUITE_P(
                          {{-2, -8}, {-2, -10}, {-8, -10}, {-8, -8}},
                          {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
 
-        //! \test Test decomposition with t single-point concavities on closing side of inner loop
+        //! \test Test decomposition with two single-point concavities on closing side of inner loop
         PolygonAndDcel{{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}},
                         {{{-2, -2}, {-2, -3}, {-3, -3.5}, {-2, -4}, {-2, -6}, {-3, -6.5}, {-2, -7}, {-2, -8}, {-8, -8}, {-8, -2}}}},
                        {{{{0, 0}, {0, -10}, {-2, -10}, {-2, -8}, {-2, -7}, {-2, -6}, {-2, -4}, {-2, -3}, {-2, -2}, {-2, 0}},
@@ -991,7 +1097,7 @@ INSTANTIATE_TEST_SUITE_P(
                          {{-2, -8}, {-2, -10}, {-8, -10}, {-8, -8}},
                          {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
 
-        //! \test Test decomposition with t multi-point concavities on closing side of inner loop
+        //! \test Test decomposition with two multi-point concavities on closing side of inner loop
         PolygonAndDcel{{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}},
                         {{{-2, -2},
                           {-2, -3},
@@ -1014,7 +1120,7 @@ INSTANTIATE_TEST_SUITE_P(
                          {{-2, -8}, {-2, -10}, {-8, -10}, {-8, -8}},
                          {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
 
-        //! \test Test decomposition with t single-point concavities as the closing side of inner loop
+        //! \test Test decomposition with two single-point concavities as the closing side of inner loop
         PolygonAndDcel{{{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}}, {{{-2, -2}, {-3, -4}, {-2, -5}, {-3, -6}, {-2, -8}, {-8, -8}, {-8, -2}}}},
                        {{{{0, 0}, {0, -10}, {-2, -10}, {-2, -8}, {-2, -5}, {-2, -2}, {-2, 0}},
                          {{-2, 0}, {-2, -2}, {-8, -2}, {-8, 0}},
@@ -1023,7 +1129,7 @@ INSTANTIATE_TEST_SUITE_P(
                          {{-2, -8}, {-2, -10}, {-8, -10}, {-8, -8}},
                          {{-8, -10}, {-10, -10}, {-10, 0}, {-8, 0}, {-8, -2}, {-8, -8}}}}},
 
-        //! \test Test decomposition with t multi-point concavities as the closing side of inner loop
+        //! \test Test decomposition with two multi-point concavities as the closing side of inner loop
         PolygonAndDcel{
             {{{0, 0}, {0, -10}, {-10, -10}, {-10, 0}},
              {{{-2, -2}, {-3, -2.5}, {-4, -4}, {-3, -4.75}, {-2, -5}, {-3, -5.25}, {-4, -6}, {-3, -7.5}, {-2, -8}, {-8, -8}, {-8, -2}}}},
@@ -1036,13 +1142,14 @@ INSTANTIATE_TEST_SUITE_P(
 
         ));
 
-// Specific test cases from things that broke during usage
+//! \brief Test suite containing tests for specific edge cases encountered during usage
 INSTANTIATE_TEST_SUITE_P(CCPPTests_Real_Edge_Cases, ModifiedTrapezoidalPolygonDecomposition,
 
                          Values(
-                             //! \test Test decomposition with a pike outwards on closing side of exterior loop, where the
+                             //! \test Test decomposition with a spike outwards on closing side of exterior loop, where the
                              //! segment below it starts to the right of where the spike starts
                              PolygonAndDcel{{{{0, 0}, {0, 10}, {10, 10}, {10, 8}, {12, 5}, {11, 3.5}, {10, 3}, {10, 0}}},
                                             {{{{0, 0}, {0, 10}, {10, 10}, {10, 8}, {12, 5}, {11, 3.5}, {10, 3}, {10, 0}}}}}
 
                              ));
+}

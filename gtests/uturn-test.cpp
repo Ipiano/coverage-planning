@@ -3,12 +3,14 @@
 #include <gtest/gtest.h>
 
 using namespace testing;
-using namespace ads::ccpp;
 using namespace boost::geometry;
+using namespace ads::ccpp;
 
 typedef model::d2::point_xy<double> Point2d;
 typedef model::segment<Point2d> Segment2d;
 
+namespace tests
+{
 quantity::Radians toRad(const double degrees)
 {
     return static_cast<quantity::Radians>(units::Degree * degrees);
@@ -93,4 +95,5 @@ TEST(CCPPTests, UTurnAtAngleMoreExpensiveThanPerpendicular)
 
     segment = {{0, 0}, {1, 1}};
     EXPECT_GT(calculator.calculateTurnCost(segment, toRad(0)), calculator.calculateTurnCost(segment, toRad(-45)));
+}
 }
