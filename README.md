@@ -172,7 +172,7 @@ The following code snippet shows how to use the library to execute the QuickOpp 
 try
 {
     const auto ringsAndLines = ads::ccpp::quickOpp(myPolygon, 1, ads::ccpp::turn_cost::UShaped());
-} catch (ads::Error& err)
+} catch (ads::AssertionFailure& err)
 {
     // do something
 }
