@@ -70,7 +70,6 @@ MainWindow::MainWindow(const QVector<std::shared_ptr<ImportShapeInterfaceFactory
 
     connect(m_ui->checkBox_rawShape, &QCheckBox::clicked, this, &MainWindow::updateView);
     connect(m_ui->checkBox_initialDir, &QCheckBox::clicked, this, &MainWindow::updateView);
-    connect(m_ui->checkBox_sweepOrder, &QCheckBox::clicked, this, &MainWindow::updateView);
     connect(m_ui->checkBox_rotate, &QCheckBox::clicked, this, &MainWindow::updateView);
     connect(m_ui->checkBox_decomposition, &QCheckBox::clicked, this, &MainWindow::updateView);
     connect(m_ui->checkBox_unmergedSwaths, &QCheckBox::clicked, this, &MainWindow::updateView);
@@ -163,7 +162,6 @@ void MainWindow::updateView()
 
     m_rawShape->setVisible(m_ui->checkBox_rawShape->checkState() == Qt::CheckState::Checked);
     m_initialDirArrow->setVisible(m_ui->checkBox_initialDir->checkState() == Qt::CheckState::Checked);
-    //m_sweepPath->setVisible(m_ui->checkBox_sweepOrder->checkState() == Qt::CheckState::Checked);
     m_decomposition->setVisible(m_ui->checkBox_decomposition->checkState() == Qt::CheckState::Checked);
     m_optimalSwathLines->setVisible(m_ui->checkBox_unmergedSwaths->checkState() == Qt::CheckState::Checked);
     m_mergedRegions->setVisible(m_ui->checkBox_mergedRegions->checkState() == Qt::CheckState::Checked);
@@ -194,7 +192,7 @@ void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::degree>& shapeDegree
     auto shapeXY1 = project_polygon(shapeDegrees);
     ccpp::geometry::Polygon2d shapeXY2;
 
-    ccpp::geometry::Point2d centroid;
+    ccpp::geometry::Point2d centroid(0, 0);
     bg::centroid(shapeXY1, centroid);
 
     bg::strategy::transform::translate_transformer<double, 2, 2> translate(-bg::get<0>(centroid), -bg::get<1>(centroid));
@@ -210,7 +208,7 @@ void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::degree>& shapeDegree
     const auto shapeDiag   = std::sqrt(shapeWidth + shapeWidth * shapeHeight + shapeHeight);
 
     // Works pretty well as an average width for viewing
-    const auto borderWidth = std::max(1., 0.075 * shapeDiag);
+    const auto borderWidth = std::max(2., 0.15 * shapeDiag);
 
     m_rawShape = drawItem(shapeXY, borderWidth);
 
@@ -218,8 +216,10 @@ void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::degree>& shapeDegree
     ccpp::optimal_direction::MinAcrossAngles dirCalculator(turnCost);
 
     ccpp::initial_cost::MinAcrossAngles initialCost(dirCalculator);
-    const auto initialResult = initialCost.calculateInitialDirection(shapeXY);
-    m_sweepDir               = initialResult;
+    const auto initialResult = initialCost.calculateInitialDirectionAndCost(shapeXY);
+    m_sweepDir               = initialResult.first;
+
+    m_ui->label_initialCost->setText(QString::number(initialResult.second, 'f', 2));
 
     // Move shape to origin, and rotate so sweep dir is positive X direction
     const auto transform    = ccpp::moveToOriginAndRotateCCWTransform(shapeXY, -m_sweepDir);
@@ -235,7 +235,11 @@ void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::degree>& shapeDegree
         auto dcel = decomposer.decomposePolygon(adjustedShapeXY);
 
         ccpp::RegionMerger merger(dirCalculator);
-        auto regionGroups = merger.mergeRegions(dcel);
+        const auto regionGroupsAndCost = merger.mergeRegions(dcel);
+        auto& regionGroups             = regionGroupsAndCost.first;
+        const auto finalCost           = regionGroupsAndCost.second;
+
+        m_ui->label_finalCost->setText(QString::number(finalCost, 'f', 2));
 
         bool valid;
         std::string err;
@@ -314,11 +318,10 @@ void MainWindow::loadShape(const geometry::GeoPolygon2d<bg::degree>& shapeDegree
         m_scene->addItem(m_mergedSwathLines);
     }
 
-    m_initialDirArrow = drawArrow(bg::make_zero<ccpp::geometry::Point2d>(), 0.25 * shapeDiag, initialResult, borderWidth);
+    m_initialDirArrow = drawArrow(bg::make_zero<ccpp::geometry::Point2d>(), 0.25 * shapeDiag, initialResult.first, borderWidth);
 
     m_scene->addItem(m_rawShape);
     m_scene->addItem(m_initialDirArrow);
-    //m_scene->addItem(m_sweepPath);
 
     updateView();
 }
