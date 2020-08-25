@@ -77,7 +77,7 @@ using interfaces::OptimalDirectionCalculatorIf;
 using interfaces::region_merger::MergeRegion;
 using interfaces::region_merger::MergeRegionGroup;
 
-std::vector<MergeRegionGroup> mergeRegions(const Dcel& dcel, const OptimalDirectionCalculatorIf& dirCalculator);
+std::pair<std::vector<MergeRegionGroup>, double> mergeRegions(const Dcel& dcel, const OptimalDirectionCalculatorIf& dirCalculator);
 void mergeBestAdjacentRegion(dcel::Region currentRegion, dcel::Region previousRegion, const OptimalDirectionCalculatorIf& dirCalculator,
                              const MergeRegionDetailsMap& mergeDetailsMap);
 void mergeTwoRegions(dcel::Region left, dcel::Region right, dcel::HalfEdge sharedEdgeLeftSide,
@@ -87,12 +87,12 @@ RegionMerger::RegionMerger(const OptimalDirectionCalculatorIf& dirCalculator) : 
 {
 }
 
-std::vector<MergeRegionGroup> RegionMerger::mergeRegions(const Dcel& dcel)
+std::pair<std::vector<MergeRegionGroup>, double> RegionMerger::mergeRegions(const Dcel& dcel)
 {
     return region_merger::mergeRegions(dcel, m_dirCalculator);
 }
 
-std::vector<MergeRegionGroup> mergeRegions(const Dcel& dcel, const OptimalDirectionCalculatorIf& dirCalculator)
+std::pair<std::vector<MergeRegionGroup>, double> mergeRegions(const Dcel& dcel, const OptimalDirectionCalculatorIf& dirCalculator)
 {
     MergeRegionDetailsMap mergeDetails;
 
@@ -130,6 +130,7 @@ std::vector<MergeRegionGroup> mergeRegions(const Dcel& dcel, const OptimalDirect
     mergeBestAdjacentRegion(startEdge.region(), dcel::Region(), dirCalculator, mergeDetails);
 
     // Build the result
+    double totalCost = 0;
     std::vector<MergeRegionGroup> result;
     while (!mergeDetails.empty())
     {
@@ -150,6 +151,12 @@ std::vector<MergeRegionGroup> mergeRegions(const Dcel& dcel, const OptimalDirect
 
             mergeGroup.regionsToMerge.push_back(mr);
 
+            totalCost += regionPtr->optimalDirectionCost;
+            if (regionPtr->leftMergeGroup)
+                totalCost -= regionPtr->leftMergeGroup->rightRegionSavings;
+            if (regionPtr->rightMergeGroup)
+                totalCost -= regionPtr->rightMergeGroup->leftRegionSavings;
+
             // Move to next region and delete the current one
             MergeRegionDetails* nextRegion = nullptr;
             if (regionPtr->rightMergeGroup)
@@ -161,7 +168,7 @@ std::vector<MergeRegionGroup> mergeRegions(const Dcel& dcel, const OptimalDirect
         result.push_back(mergeGroup);
     }
 
-    return result;
+    return {std::move(result), totalCost};
 }
 
 static quantity::Radians normal(const quantity::Radians angle)

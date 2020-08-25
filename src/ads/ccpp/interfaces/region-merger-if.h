@@ -49,11 +49,11 @@ class RegionMergerIf
      *
      * \param[in] dcel Doubly-Connected Edge List with regions to consider merging
      *
-     * \return List of MergeRegionGroups; where each indicates a group of regions that should
-     * be merged together. All regions in the input must be in exactly one of the output MergeRegionGroups.
-     * Regions in a group should be ordered from left to right
+     * \return List of MergeRegionGroups and total cost using this solution. Each group indicates a group of
+     * regions that should be merged together. All regions in the input must be in exactly one of the output
+     * MergeRegionGroups. Regions in a group should be ordered from left to right
      */
-    virtual std::vector<region_merger::MergeRegionGroup> mergeRegions(const Dcel& dcel) = 0;
+    virtual std::pair<std::vector<region_merger::MergeRegionGroup>, double> mergeRegions(const Dcel& dcel) = 0;
 };
 }
 }

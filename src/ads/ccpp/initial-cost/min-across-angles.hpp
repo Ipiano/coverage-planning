@@ -49,17 +49,18 @@ class MinAcrossAngles
      * the shape given.
      *
      * \param poly Shape to find initial direction for
-     * \return Direction, in radians, of the normal to the lowest-cost direction.
+     * \return Direction, in radians, of the normal to the lowest-cost direction, and cost of covering the field
+     *          entirely that direction
      */
-    quantity::Radians calculateInitialDirection(const geometry::Polygon2d& poly) const
+    std::pair<quantity::Radians, double> calculateInitialDirectionAndCost(const geometry::Polygon2d& poly) const
     {
         const static auto quarterTurn = static_cast<quantity::Radians>(units::Degree * 90);
 
-        const auto optimalDirResult = m_directionCalculator.calculateOptimalDirectionAndCost(poly).first;
+        const auto initialDirectionAndCost = m_directionCalculator.calculateOptimalDirectionAndCost(poly);
 
         // Return same cost, but normal to the optimal direction
         // as the sweep dir
-        return optimalDirResult + quarterTurn;
+        return {initialDirectionAndCost.first + quarterTurn, initialDirectionAndCost.second};
     }
 };
 }

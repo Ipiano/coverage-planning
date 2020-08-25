@@ -36,8 +36,9 @@ class RegionMerger : public interfaces::RegionMergerIf
      *
      * \param dcel Doubly connected edge list specifying the regions to consider merging
      * \return List of MergeRegionGroups each containing a list of regions that should be merged and their final swathing directions
+     * and total cost using this solution
      */
-    std::vector<interfaces::region_merger::MergeRegionGroup> mergeRegions(const Dcel& dcel) override;
+    std::pair<std::vector<interfaces::region_merger::MergeRegionGroup>, double> mergeRegions(const Dcel& dcel) override;
 
   private:
     const interfaces::OptimalDirectionCalculatorIf& m_dirCalculator;
